@@ -74,6 +74,8 @@ void threadEvent();
 void TermEvent();
 void threadMissile(void *);
 void threadTimeOut();
+void threadInvader();
+void threadFlotteAliens();
 
 /////////////////////////////////// Fonction Perso ////////////////////////////////////////////////
 
@@ -168,7 +170,9 @@ int main(int argc,char* argv[])
   pthread_create(&handler, NULL, (void* (*)(void*))threadEvent, NULL);
   pthread_detach(handler);
 
-
+  //Lancement ThreadInvader:
+  pthread_create(&handler, NULL, (void* (*)(void*))threadInvader, NULL);
+  pthread_detach(handler);
 
   pthread_exit(NULL);
 }
@@ -372,26 +376,16 @@ void threadMissile(void* pos){
   }
   
   while(Position.L > 0){
-
     Attente(80);
 
-    if(tab[Position.L-1][Position.C].type == VIDE){  //Case si la case devant est vide, on avance de 1
-      EffaceCarre(Position.L, Position.C);
-      mLock(&mutexGrille);
-        setTab(Position.L, Position.C, VIDE, 0);
-        Position.L--;
-        setTab(Position.L, Position.C, MISSILE, getTid());
-      mUnLock(&mutexGrille);
-      DessineMissile(Position.L, Position.C);
-    }
-    else{
-      //Si il y a quelques  chose devant nous, alors la chose devant meurt. et on sort
-      mLock(&mutexGrille);
-        setTab(Position.L-1, Position.C, VIDE, 0);
-      mUnLock(&mutexGrille);
-      EffaceCarre(Position.L-1, Position.C);
-      break;
-    }
+    //Avance du missile d'une case
+    EffaceCarre(Position.L, Position.C);
+    mLock(&mutexGrille);
+      setTab(Position.L, Position.C, VIDE, 0);
+      Position.L--;
+      setTab(Position.L, Position.C, MISSILE, getTid());
+    mUnLock(&mutexGrille);
+    DessineMissile(Position.L, Position.C);
   }
 
   //Supression du missile si il est arrivé tout en haut, ou qu'il est tombé sur un ennemi
@@ -413,4 +407,27 @@ void threadTimeOut(){
     fireOn = true;
   mUnLock(&mutexFireOn);
   pthread_exit(NULL);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////  Thread Invader /////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void threadInvader(){
+  pthread_t handlerFlotteAliens;
+  //Creation threadFlotteAliens
+  pthread_create(&handlerFlotteAliens, NULL, (void* (*)(void*))threadFlotteAliens, NULL);
+
+  //Se Synchronise sur la fin du Thread threadFlotteAliens, récupère Valeur Retour
+  pthread_join(handlerFlotteAliens, NULL);
+
+  //Si flotte aliens détruite
+
+  //Si flotte aliens atteint boucliers terrestres
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////  Thread Flotte Aliens //////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void threadFlotteAliens(){
+
 }
