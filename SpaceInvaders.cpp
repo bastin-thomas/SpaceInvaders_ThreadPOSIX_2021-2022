@@ -74,13 +74,17 @@ int colonneGauche = 8;    //ColonneGauche
 int ligneBas = 8;         //Ligne Bas
 int colonneDroite = 18;   //ColonneDroite
 
+int Score = 0;
+bool MajScore;
+
 ///////////////////////////////////       Mutex      //////////////////////////////////////////////
-pthread_mutex_t mutexGrille = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutexFireOn = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutexFlotteAliens = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutexGrille;
+pthread_mutex_t mutexFireOn;
+pthread_mutex_t mutexFlotteAliens;
+pthread_mutex_t mutexScore;
 
 /////////////////////////////////// Variables Conditions //////////////////////////////////////////
-
+pthread_cond_t condScore;
 
 /////////////////////////////////// Fonction Thread ///////////////////////////////////////////////
 void threadVaisseau();
@@ -90,6 +94,7 @@ void threadMissile(void *);
 void threadTimeOut();
 void threadInvader();
 void threadFlotteAliens();
+void threadScore();
 
 /////////////////////////////////// Fonction Perso ////////////////////////////////////////////////
 void PoseFlotte();
@@ -140,8 +145,6 @@ int main(int argc,char* argv[])
   RestoreShield();
 
 
-
-
   // Initialisation des mutex et variables de condition
   if((error = mInitDef(&mutexGrille)) != 0){
     printf("(MAIN %ld) Erreur Initialisation mutexGrille: %d\n",getTid(),error); 
@@ -149,7 +152,17 @@ int main(int argc,char* argv[])
   }
 
   if((error = mInitDef(&mutexFireOn)) != 0){
-    printf("(MAIN %ld) Erreur Initialisation mutexGrille: %d\n",getTid(),error); 
+    printf("(MAIN %ld) Erreur Initialisation mutexFireOn: %d\n",getTid(),error); 
+    fflush(stdout);
+  }
+
+  if((error = mInitDef(&mutexFlotteAliens)) != 0){
+    printf("(MAIN %ld) Erreur Initialisation mutexFlotteAliens: %d\n",getTid(),error); 
+    fflush(stdout);
+  }
+
+  if((error = pthread_cond_init(&condScore, NULL)) != 0){
+    printf("(MAIN %ld) Erreur Initialisation condScore: %d\n",getTid(),error); 
     fflush(stdout);
   }
 
@@ -205,6 +218,10 @@ int main(int argc,char* argv[])
   pthread_create(&handler, NULL, (void* (*)(void*))threadInvader, NULL);
   pthread_detach(handler);
 
+  //Lancement ThreadScore:
+  pthread_create(&handler, NULL, (void* (*)(void*))threadScore, NULL);
+  pthread_detach(handler);
+
   pthread_exit(NULL);
 }
 
@@ -222,6 +239,7 @@ void AfficheTab(){
   printf("\n");
   printf("\n");
 }
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -379,6 +397,7 @@ void TermEvent(){
   exit(0);
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////  Thread Missile /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -438,6 +457,14 @@ void threadMissile(void* pos){
           
           
             nbAliens--;
+
+            //Réveil Thread Score pour l'affichage + Incrément de 1.
+            mLock(&mutexScore);
+              Score++;
+              MajScore = true;
+            mUnLock(&mutexScore);
+            pthread_cond_signal(&condScore);
+
             RechercheBordure();
             //AfficheTab();
             printf("(threadMissile %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
@@ -471,12 +498,14 @@ void threadMissile(void* pos){
 
   pthread_exit(NULL);
 }
+
 ////////////////////////////////// Handler Signaux //////////////////////////////////////////////
 void handlerSIGINT(int sig){
   mUnLock(&mutexFlotteAliens);
   mUnLock(&mutexGrille);
   pthread_exit(NULL);
 }
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////  Thread TimeOut /////////////////////////////////////////////
@@ -488,6 +517,7 @@ void threadTimeOut(){
   mUnLock(&mutexFireOn);
   pthread_exit(NULL);
 }
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////  Thread Invader /////////////////////////////////////////////
@@ -533,6 +563,8 @@ void threadInvader(){
         mUnLock(&mutexFlotteAliens);
         break;
   }while(1);
+
+  pthread_exit(NULL);
 }
 
 void freeAlien(){
@@ -566,6 +598,7 @@ void MajLevel(int level){
   DessineChiffre(13,4,level%10);
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////  Thread Flotte Aliens //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -584,7 +617,7 @@ void threadFlotteAliens(){
           
           ShiftDroiteFlotte(); 
           RechercheBordure(); //Vérification des nouvelles bordures.
-          AfficheTab();
+          //AfficheTab();
 
         mUnLock(&mutexGrille);
 
@@ -605,7 +638,7 @@ void threadFlotteAliens(){
           
           ShiftGaucheFlotte();
           RechercheBordure(); //Vérification des nouvelles bordures.
-          AfficheTab();
+          //AfficheTab();
 
         mUnLock(&mutexGrille);
 
@@ -625,7 +658,7 @@ void threadFlotteAliens(){
         
         ShiftBasFlotte();
         RechercheBordure(); //Vérification des nouvelles bordures.
-        AfficheTab();
+        //AfficheTab();
         
       mUnLock(&mutexGrille);
 
@@ -690,12 +723,24 @@ void ShiftDroiteFlotte(){
           //Si on tombe sur un missile, on 'éteint' le thread missile correspondant, et on le supprime de l'interface
           if(tab[i][j+1].type == MISSILE)
           {
+            //Tue le missile
             pthread_kill(tab[i][j+1].tid, SIGINT);
+            
             EffaceCarre(i,j);
             EffaceCarre(i,j+1);
             setTab(i,j, VIDE, 0);
             setTab(i,j+1, VIDE, 0);
+            
             nbAliens --;
+
+            //Réveil Thread Score pour l'affichage + Incrément de 1.
+            mLock(&mutexScore);
+              Score++;
+              MajScore = true;
+            mUnLock(&mutexScore);
+            pthread_cond_signal(&condScore);
+
+            //Recherche Bordure ?
 
             printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
           }          
@@ -734,6 +779,13 @@ void ShiftGaucheFlotte(){
             setTab(i,j-1, VIDE, 0);
             nbAliens --;
 
+            //Réveil Thread Score pour l'affichage + Incrément de 1.
+            mLock(&mutexScore);
+              Score++;
+              MajScore = true;
+            mUnLock(&mutexScore);
+            pthread_cond_signal(&condScore);
+
             printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
           }
         }
@@ -742,6 +794,8 @@ void ShiftGaucheFlotte(){
   colonneGauche--;
   colonneDroite--;
 }
+
+
 
 void ShiftBasFlotte(){
     for(int i = ligneHaut ; i <= ligneBas ; i +=2){
@@ -767,7 +821,15 @@ void ShiftBasFlotte(){
             EffaceCarre(i+1,j);
             setTab(i,j, VIDE, 0);
             setTab(i+1,j, VIDE, 0);
+            
             nbAliens --;
+
+            //Réveil Thread Score pour l'affichage + Incrément de 1.
+            mLock(&mutexScore);
+              Score++;
+              MajScore = true;
+            mUnLock(&mutexScore);
+            pthread_cond_signal(&condScore);
 
             printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
           }
@@ -853,3 +915,36 @@ void RechercheBordure(){
   }
 }
 
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////  Thread Score //////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void threadScore(){
+  printf("(threadScore %ld) Score: %d \n",getTid(), Score);
+
+  DessineChiffre(10,2,0);
+  DessineChiffre(10,3,0);
+  DessineChiffre(10,4,0);
+  DessineChiffre(10,5,0);
+
+  Score = 0;
+  MajScore = true;
+
+  while(1){
+    mLock(&mutexScore);
+    while(MajScore){
+      pthread_cond_wait(&condScore, &mutexScore);
+
+      printf("(threadScore %ld) Score: %d \n",getTid(), Score);
+
+      DessineChiffre(10,2, Score/1000);
+      DessineChiffre(10,3, (Score%1000)/100);
+      DessineChiffre(10,4, ((Score%1000)%100)/10);
+      DessineChiffre(10,5, ((Score%1000)%100)%10);
+    }
+    MajScore = false;
+    mUnLock(&mutexScore);
+  }
+  pthread_exit(NULL);
+}
