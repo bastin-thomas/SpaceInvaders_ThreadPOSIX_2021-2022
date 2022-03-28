@@ -61,10 +61,12 @@ void setTab(int l,int c,int type,pthread_t tid)
 
 
 /////////////////////////////////// Variables Globales ////////////////////////////////////////////
+#define DELAI 1000
+
 int colVaisseau = 15;
 bool fireOn = true;
 
-int delai = 1000;
+int delai = DELAI;
 
 int nbAliens = 24;
 int ligneHaut = 2;        //Ligne Haut
@@ -97,12 +99,15 @@ void ShiftBasFlotte();
 void RechercheBordure();
 void freeAlien();
 void RestoreShield();
+void MajLevel(int level);
+void AfficheTab();
 
 /////////////////////////////////// Handler Signaux ///////////////////////////////////////////////
 void handlerSIGUSR1(int sig);
 void handlerSIGUSR2(int sig);
 void handlerSIGHUP(int sig);
 void handlerSIGINT(int sig);
+void handlerSIGQUIT(int sig);
 
 
 
@@ -138,12 +143,12 @@ int main(int argc,char* argv[])
 
 
   // Initialisation des mutex et variables de condition
-  if(( error = mInitDef(&mutexGrille)) != 0){
+  if((error = mInitDef(&mutexGrille)) != 0){
     printf("(MAIN %ld) Erreur Initialisation mutexGrille: %d\n",getTid(),error); 
     fflush(stdout);
   }
 
-  if(( error = mInitDef(&mutexFireOn)) != 0){
+  if((error = mInitDef(&mutexFireOn)) != 0){
     printf("(MAIN %ld) Erreur Initialisation mutexGrille: %d\n",getTid(),error); 
     fflush(stdout);
   }
@@ -178,7 +183,13 @@ int main(int argc,char* argv[])
   Action.sa_handler = handlerSIGINT;
   sigfillset(&Action.sa_mask);
   Action.sa_flags = SA_RESTART;
-  if(sigaction(SIGINT, &Action, NULL) == -1) printf("(MAIN %ld) Erreur de Sigaction SIGUSR1\n",getTid());
+  if(sigaction(SIGINT, &Action, NULL) == -1) printf("(MAIN %ld) Erreur de Sigaction SIGINT\n",getTid());
+
+  // Armement SIGQUIT
+  Action.sa_handler = handlerSIGQUIT;
+  sigfillset(&Action.sa_mask);
+  Action.sa_flags = SA_RESTART;
+  if(sigaction(SIGQUIT, &Action, NULL) == -1) printf("(MAIN %ld) Erreur de Sigaction SIGQUIT\n",getTid());
 
 
   // Creation des threads
@@ -198,7 +209,19 @@ int main(int argc,char* argv[])
 }
 
 
-
+void AfficheTab(){
+  printf("\n");
+  printf("\n");
+  for(int i = 0; i<NB_LIGNE; i++){
+    for(int j = 8; j<NB_COLONNE; j++){
+      printf("%d\t",tab[i][j].type);
+    }
+    printf("\n");
+    printf("\n");
+  }
+  printf("\n");
+  printf("\n");
+}
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,27 +235,27 @@ void threadVaisseau(){
   sigdelset(&masque, SIGUSR1);
   sigdelset(&masque, SIGUSR2);
   sigdelset(&masque, SIGHUP);
+  sigdelset(&masque, SIGQUIT);
   sigprocmask(SIG_SETMASK, &masque, NULL);
 
-
   printf("(ThreadVaisseau %ld) Init du Vaisseau\n",getTid());  
+  mLock(&mutexGrille);
   if (tab[NB_LIGNE-1][colVaisseau].type == VIDE) 
   {
-    mLock(&mutexGrille);
-      setTab(NB_LIGNE-1, colVaisseau, VAISSEAU, getTid());
-    mUnLock(&mutexGrille);
+    setTab(NB_LIGNE-1, colVaisseau, VAISSEAU, getTid());
     DessineVaisseau(NB_LIGNE-1, colVaisseau);
   }
   else{
     printf("(ThreadVaisseau %ld) ERROR Init du Vaisseau: Case Non Vide\n",getTid()); 
   } 
+  mUnLock(&mutexGrille);
   
-  //Attente Touche
+  //Attente Signal
   while(1){
     pause();
   }
 
-  printf("(ThreadVaisseau %ld) Fermeture du Thread\n",getTid());
+  printf("(ThreadVaisseau %ld) Fermeture du Thread\n",getTid()); fflush(stdout);
   pthread_exit(NULL);
 }
 
@@ -241,19 +264,20 @@ void threadVaisseau(){
 ////////////////////////////////////  Handler Signaux /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void handlerSIGUSR1(int sig){
-  printf("(ThreadVaisseau %ld) Déplacement Droite\n",getTid());
+  //printf("(ThreadVaisseau %ld) Déplacement Droite\n",getTid());
 
   if(colVaisseau == NB_COLONNE - 1) return; //Si on est au bord de la colonne on skip l'instruction
 
   if (tab[NB_LIGNE-1][colVaisseau+1].type == VIDE) 
   {
-    //Supression du sprite actuelle, et ajout du sprite a droite comme étant le vaisseau.
-    EffaceCarre(NB_LIGNE-1, colVaisseau);
     mLock(&mutexGrille);
+      //Supression du sprite actuelle, et ajout du sprite a droite comme étant le vaisseau.
+      EffaceCarre(NB_LIGNE-1, colVaisseau);
       setTab(NB_LIGNE-1, colVaisseau, VIDE, 0);
       setTab(NB_LIGNE-1, colVaisseau+1, VAISSEAU, getTid());
+      DessineVaisseau(NB_LIGNE-1, colVaisseau+1);
     mUnLock(&mutexGrille);
-    DessineVaisseau(NB_LIGNE-1, colVaisseau+1);
+    
 
     //Update Emplacement Vaisseau connus de façons Global
     colVaisseau++;
@@ -261,19 +285,19 @@ void handlerSIGUSR1(int sig){
 }
 
 void handlerSIGUSR2(int sig){
-  printf("(ThreadVaisseau %ld) Déplacement Gauche\n",getTid());
+  //printf("(ThreadVaisseau %ld) Déplacement Gauche\n",getTid());
 
   if(colVaisseau == 8 ) return; //Si on est au bord de la colonne on skip l'instruction
 
   if (tab[NB_LIGNE-1][colVaisseau-1].type == VIDE) 
   {
-    //Supression du sprite actuelle, et ajout du sprite a gauche comme étant le vaisseau.
-    EffaceCarre(NB_LIGNE-1, colVaisseau);
     mLock(&mutexGrille);
+      //Supression du sprite actuelle, et ajout du sprite a gauche comme étant le vaisseau.
+      EffaceCarre(NB_LIGNE-1, colVaisseau);
       setTab(NB_LIGNE-1, colVaisseau, VIDE, 0);
       setTab(NB_LIGNE-1, colVaisseau-1, VAISSEAU, getTid());
+      DessineVaisseau(NB_LIGNE-1, colVaisseau-1);
     mUnLock(&mutexGrille);
-    DessineVaisseau(NB_LIGNE-1, colVaisseau-1);
 
     //Update Emplacement Vaisseau connus de façons Global
     colVaisseau--;
@@ -281,27 +305,34 @@ void handlerSIGUSR2(int sig){
 }
 
 void handlerSIGHUP(int sig){
-  printf("(ThreadVaisseau %ld) Envoi Missile\n",getTid());
+  //printf("(ThreadVaisseau %ld) Envoi Missile\n",getTid());
   pthread_t handler;
   S_POSITION* Position = new S_POSITION;
   Position->L = NB_LIGNE-2;
   Position->C = colVaisseau;
 
+  mLock(&mutexFireOn);
   if(fireOn == true){
     //Lancement ThreadEvent:
     pthread_create(&handler, NULL, (void* (*)(void*))threadMissile, (void*) Position);
     pthread_detach(handler);
 
-    mLock(&mutexFireOn);
-      fireOn = false;
-    mUnLock(&mutexFireOn);
+    fireOn = false;
     
     pthread_create(&handler, NULL, (void* (*)(void*))threadTimeOut, NULL);
     pthread_detach(handler);
-  }  
+  } 
+  mUnLock(&mutexFireOn);
 }
 
-
+void handlerSIGQUIT(int sig){
+  printf("(ThreadVaisseau %ld) Fin ThreadVaisseau\n",getTid()); 
+  mLock(&mutexGrille);
+    EffaceCarre(NB_LIGNE-1, colVaisseau); 
+    setTab(NB_LIGNE-1,colVaisseau, VIDE,0);
+  mUnLock(&mutexGrille);
+  pthread_exit(NULL);
+}
 
 
 
@@ -366,24 +397,24 @@ void threadMissile(void* pos){
     case VIDE:  
                 mLock(&mutexGrille);
                   setTab(Position.L, Position.C, MISSILE, getTid());
+                  DessineMissile(Position.L, Position.C);
                 mUnLock(&mutexGrille);
-                DessineMissile(Position.L, Position.C);
             break;
     
     //Si case Bouclier1 Transformation en Bouclier2
     case BOUCLIER1:
                 mLock(&mutexGrille);
                   setTab(Position.L, Position.C, BOUCLIER2, 0);
+                  DessineBouclier(Position.L, Position.C, 2);
                 mUnLock(&mutexGrille);
-                DessineBouclier(Position.L, Position.C, 2);
                 pthread_exit(NULL);
               break;
     //Si case Bouclier2 Supression Bouclier2
     case BOUCLIER2:
                 mLock(&mutexGrille);
                   setTab(Position.L, Position.C, VIDE, 0);
+                  EffaceCarre(Position.L, Position.C);
                 mUnLock(&mutexGrille);
-                EffaceCarre(Position.L, Position.C);
                 pthread_exit(NULL);
               break;
   }
@@ -391,42 +422,52 @@ void threadMissile(void* pos){
   while(Position.L > 0){
     Attente(80);
     
-    //Avance du missile d'une case
-    EffaceCarre(Position.L, Position.C);
-    
     //Supression du missile si il tombe sur un Alien
-    if(tab[Position.L-1][Position.C].type == ALIEN)
-    {
-      mLock(&mutexGrille);
-        setTab(Position.L, Position.C, VIDE, 0);
-        Position.L--;
-        setTab(Position.L, Position.C, VIDE, 0);
+    mLock(&mutexFlotteAliens);
+    mLock(&mutexGrille);
+    
+      if(tab[Position.L-1][Position.C].type == ALIEN)
+      {
         
-        mLock(&mutexFlotteAliens);
-          nbAliens--;
-          RechercheBordure();
-        mUnLock(&mutexFlotteAliens);
-        EffaceCarre(Position.L, Position.C);
-      mUnLock(&mutexGrille);  
-      pthread_exit(NULL);
-    }
+          //Avance du missile d'une case
+          EffaceCarre(Position.L, Position.C);
 
-    if(tab[Position.L-1][Position.C].type == VIDE)
-    {
-      mLock(&mutexGrille);
-        setTab(Position.L, Position.C, VIDE, 0);
-        Position.L--;
-        setTab(Position.L, Position.C, MISSILE, getTid());
-      mUnLock(&mutexGrille);
-      DessineMissile(Position.L, Position.C);
-    }    
+          setTab(Position.L, Position.C, VIDE, 0);
+          Position.L--;
+          setTab(Position.L, Position.C, VIDE, 0);
+          
+          
+            nbAliens--;
+            RechercheBordure();
+            //AfficheTab();
+            printf("(threadMissile %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+          
+          EffaceCarre(Position.L, Position.C);
+        mUnLock(&mutexGrille);  
+        mUnLock(&mutexFlotteAliens);
+        pthread_exit(NULL);
+      }
+
+      if(tab[Position.L-1][Position.C].type == VIDE)
+      {
+          //Avance du missile d'une case
+          EffaceCarre(Position.L, Position.C);
+
+          setTab(Position.L, Position.C, VIDE, 0);
+          Position.L--;
+          setTab(Position.L, Position.C, MISSILE, getTid());
+
+          DessineMissile(Position.L, Position.C);
+      }    
+      mUnLock(&mutexGrille);  
+      mUnLock(&mutexFlotteAliens);
   }
 
   //Supression du missile si il est arrivé tout en haut
   mLock(&mutexGrille);
     setTab(Position.L, Position.C, VIDE, 0);
+    EffaceCarre(Position.L, Position.C);
   mUnLock(&mutexGrille);
-  EffaceCarre(Position.L, Position.C);
 
   pthread_exit(NULL);
 }
@@ -454,58 +495,75 @@ void threadTimeOut(){
 void threadInvader(){
   bool Alienisdead;
   pthread_t handlerFlotteAliens;
-  //Creation threadFlotteAliens
-  pthread_create(&handlerFlotteAliens, NULL, (void* (*)(void*))threadFlotteAliens, NULL);
-
-  //Se Synchronise sur la fin du Thread threadFlotteAliens, récupère Valeur Retour
-  pthread_join(handlerFlotteAliens, NULL);
-
-  mLock(&mutexFlotteAliens);
-  //Si flotte aliens détruite
-  if(nbAliens == 0){
-    Alienisdead == true;
-  }
-  //Si flotte aliens atteint boucliers terrestres
-  else{
-    Alienisdead == false;
-  }
-  mUnLock(&mutexFlotteAliens);
-
-  Attente(600);
+  int level = 01;
 
   mLock(&mutexGrille);
-    freeAlien();
-    RestoreShield();
+    MajLevel(level);
   mUnLock(&mutexGrille);
+  
+  do{
+      printf("\n(ThreadInvader %ld)... Level: %d Délai : %d...\n\n",getTid(),level, delai);
+      //Creation threadFlotteAliens
+      pthread_create(&handlerFlotteAliens, NULL, (void* (*)(void*))threadFlotteAliens, NULL);
 
-  if(Alienisdead == true){
-
-  }
-
-  if(Alienisdead == false){
-    
-
-  } 
+      //Se Synchronise sur la fin du Thread threadFlotteAliens, récupère Valeur Retour
+      pthread_join(handlerFlotteAliens, NULL);
 
 
+      mLock(&mutexFlotteAliens);
+      mLock(&mutexGrille);
+        freeAlien();
+        RestoreShield();
+      
+        //Si Flotte Tuée
+        if(nbAliens == 0){
+            delai *= 0.70;
+
+            MajLevel(++level);
+            
+            mUnLock(&mutexGrille);
+            mUnLock(&mutexFlotteAliens);
+            continue;
+        }
+        //Si Joueur Perdu
+        printf("(ThreadInvader %ld)... PERDU ...\n",getTid());
+        pthread_kill(tab[NB_LIGNE-1][colVaisseau].tid,SIGQUIT);
+
+        mUnLock(&mutexGrille);
+        mUnLock(&mutexFlotteAliens);
+        break;
+  }while(1);
 }
 
 void freeAlien(){
-    for(int i = 0 ; i < NB_LIGNE-2 ; i++){
-      for(int j = 8 ; j < NB_COLONNE ; j++){
+  for(int i = 0 ; i < NB_LIGNE-2 ; i++){
+    for(int j = 8 ; j < NB_COLONNE ; j++){
+      if(tab[i][j].type == ALIEN){
+        setTab(i,j,VIDE,0);
+        EffaceCarre(i,j);
+      }
+
+      if(tab[i][j].type == MISSILE){
+        pthread_kill(tab[i][j].tid, SIGINT);
         setTab(i,j,VIDE,0);
         EffaceCarre(i,j);
       }
     }
+  }
 }
 
 void RestoreShield(){
-    setTab(NB_LIGNE-2,11,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,11,1);
-    setTab(NB_LIGNE-2,12,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,12,1);
-    setTab(NB_LIGNE-2,13,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,13,1);
-    setTab(NB_LIGNE-2,17,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,17,1);
-    setTab(NB_LIGNE-2,18,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,18,1);
-    setTab(NB_LIGNE-2,19,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,19,1);
+  setTab(NB_LIGNE-2,11,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,11,1);
+  setTab(NB_LIGNE-2,12,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,12,1);
+  setTab(NB_LIGNE-2,13,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,13,1);
+  setTab(NB_LIGNE-2,17,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,17,1);
+  setTab(NB_LIGNE-2,18,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,18,1);
+  setTab(NB_LIGNE-2,19,BOUCLIER1,0);  DessineBouclier(NB_LIGNE-2,19,1);
+}
+
+void MajLevel(int level){
+  DessineChiffre(13,3,level/10);
+  DessineChiffre(13,4,level%10);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -523,8 +581,11 @@ void threadFlotteAliens(){
       Attente(delai);
       mLock(&mutexFlotteAliens);
         mLock(&mutexGrille);
+          
           ShiftDroiteFlotte(); 
           RechercheBordure(); //Vérification des nouvelles bordures.
+          AfficheTab();
+
         mUnLock(&mutexGrille);
 
         if(nbAliens == 0)
@@ -541,9 +602,13 @@ void threadFlotteAliens(){
       Attente(delai);
       mLock(&mutexFlotteAliens);
         mLock(&mutexGrille);
+          
           ShiftGaucheFlotte();
           RechercheBordure(); //Vérification des nouvelles bordures.
+          AfficheTab();
+
         mUnLock(&mutexGrille);
+
         if(nbAliens == 0)
         {
           printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
@@ -557,9 +622,13 @@ void threadFlotteAliens(){
 
     mLock(&mutexFlotteAliens);
       mLock(&mutexGrille);
+        
         ShiftBasFlotte();
         RechercheBordure(); //Vérification des nouvelles bordures.
+        AfficheTab();
+        
       mUnLock(&mutexGrille);
+
       if(nbAliens == 0)
       {
         printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
@@ -600,23 +669,20 @@ void PoseFlotte(){
       }
     mUnLock(&mutexGrille);
   mUnLock(&mutexFlotteAliens);
-  
 }
 
 
 void ShiftDroiteFlotte(){
-
-    for(int i = ligneHaut ; i <= ligneBas ; i += 2){
-      for(int j = colonneGauche ; j <= colonneDroite ; j += 2){
+    for(int i = ligneHaut ; i <= ligneBas ; i +=2){
+      for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
         if(tab[i][j].type == ALIEN)
         {  
-          EffaceCarre(i,j);
-
           //Si on tombe sur une case vide, on se déplace juste
           if(tab[i][j+1].type == VIDE)
           { 
-              setTab(i,j, VIDE, 0);
-              setTab(i,j+1, ALIEN, getpid());
+            EffaceCarre(i,j);
+            setTab(i,j, VIDE, 0);
+            setTab(i,j+1, ALIEN, getTid());
             DessineAlien(i,j+1);
             continue;
           }
@@ -625,36 +691,34 @@ void ShiftDroiteFlotte(){
           if(tab[i][j+1].type == MISSILE)
           {
             pthread_kill(tab[i][j+1].tid, SIGINT);
-
+            EffaceCarre(i,j);
             EffaceCarre(i,j+1);
-              setTab(i,j, VIDE, 0);
-              setTab(i,j+1, VIDE, 0);
+            setTab(i,j, VIDE, 0);
+            setTab(i,j+1, VIDE, 0);
             nbAliens --;
 
             printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
-            continue;
           }          
         }
       }
     }
-    colonneGauche++;
-    colonneDroite++;  
+  colonneGauche++;
+  colonneDroite++;  
 }
 
 
 void ShiftGaucheFlotte(){
 
-    for(int i = ligneHaut ; i <= ligneBas ; i += 2){
-      for(int j = colonneGauche ; j <= colonneDroite ; j += 2){
+    for(int i = ligneHaut ; i <= ligneBas ; i +=2){
+      for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
         if(tab[i][j].type == ALIEN)
         {  
-          EffaceCarre(i,j);
-
           //Si on tombe sur une case vide, on se déplace juste
           if(tab[i][j-1].type == VIDE)
           { 
+            EffaceCarre(i,j);
             setTab(i,j, VIDE, 0);
-            setTab(i,j-1, ALIEN, getpid());
+            setTab(i,j-1, ALIEN, getTid());
             DessineAlien(i,j-1);
             continue;
           }
@@ -663,34 +727,33 @@ void ShiftGaucheFlotte(){
           if(tab[i][j-1].type == MISSILE)
           {
             pthread_kill(tab[i][j-1].tid, SIGINT);
+
+            EffaceCarre(i,j);
             EffaceCarre(i,j-1);
             setTab(i,j, VIDE, 0);
             setTab(i,j-1, VIDE, 0);
             nbAliens --;
 
             printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
-            continue;
           }
         }
       }
     }
-    colonneGauche--;
-    colonneDroite--;
+  colonneGauche--;
+  colonneDroite--;
 }
 
 void ShiftBasFlotte(){
-
-    for(int i = ligneHaut ; i <= ligneBas ; i += 2){
-      for(int j = colonneGauche ; j <= colonneDroite ; j += 2){
+    for(int i = ligneHaut ; i <= ligneBas ; i +=2){
+      for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
         if(tab[i][j].type == ALIEN)
         {  
-          EffaceCarre(i,j);
-
           //Si on tombe sur une case vide, on se déplace juste
           if(tab[i+1][j].type == VIDE)
           { 
+            EffaceCarre(i,j);
             setTab(i,j, VIDE, 0);
-            setTab(i+1,j, ALIEN, getpid());
+            setTab(i+1,j, ALIEN, getTid());
             DessineAlien(i+1,j);
             continue;
           } 
@@ -700,30 +763,31 @@ void ShiftBasFlotte(){
           {
             pthread_kill(tab[i+1][j].tid, SIGINT);
 
+            EffaceCarre(i,j);
             EffaceCarre(i+1,j);
             setTab(i,j, VIDE, 0);
             setTab(i+1,j, VIDE, 0);
             nbAliens --;
 
             printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
-            continue;
           }
         }
       }
     }
-    ligneBas++;
-    ligneHaut++;
+  ligneBas++;
+  ligneHaut++;
 }
 
 void RechercheBordure(){
   bool test = true;
+
+  if(nbAliens == 0) return;
+
   while(1){
-      //Si les bords externe de ligneBas sont vide, on regarde si toutes les cases sont vide, 
-      if(tab[ligneBas][colonneGauche].type == VIDE && tab[ligneBas][colonneDroite].type == VIDE) 
-      {
+      //Si les bords externe de lignehaut sont vide, on regarde si toutes les cases sont vide, 
         test = true;
         for(int i = colonneGauche ; i<= colonneDroite ; i++){
-          if(tab[ligneBas][i].type != VIDE){
+          if(tab[ligneHaut][i].type == ALIEN){
             test = false;
             break;
           }
@@ -731,18 +795,32 @@ void RechercheBordure(){
 
         //si oui, on retire une ligne, et on réentre dans la boucle
         if(test){
-          ligneBas -= 2;
+          ligneHaut+=2;
           continue;
         }
-      }
+
+
+      //Si les bords externe de ligneBas sont vide, on regarde si toutes les cases sont vide, 
+        test = true;
+        for(int i = colonneGauche ; i<= colonneDroite ; i++){
+          if(tab[ligneBas][i].type == ALIEN){
+            test = false;
+            break;
+          }
+        }
+
+        //si oui, on retire une ligne, et on réentre dans la boucle
+        if(test){
+          ligneBas-=2;
+          continue;
+        }
+      
       //Si non on passe aux cas suivant.
 
       //Si les bords externe de colonneGauche sont vide, on regarde si toutes les cases du vecteur colonneGauche sont vide, 
-      if(tab[ligneHaut][colonneGauche].type == VIDE && tab[ligneBas][colonneGauche].type == VIDE )
-      {
         test = true;
         for(int i = ligneHaut ; i<= ligneBas ; i++){
-          if(tab[i][colonneGauche].type != VIDE){
+          if(tab[i][colonneGauche].type == ALIEN){
             test = false;
             break;
           }
@@ -750,18 +828,16 @@ void RechercheBordure(){
 
         //si oui, on retire une colonne, et on réentre dans la boucle
         if(test){
-          colonneGauche += 2;
+          colonneGauche+=2;
           continue;
         }
-      }
+      
       //Si non on passe aux cas suivant.
 
       //Si les bords externe de colonneDroite sont vide, on regarde si toutes les cases du vecteur colonneGauche sont vide,
-      if(tab[ligneHaut][colonneDroite].type == VIDE && tab[ligneBas][colonneDroite].type == VIDE) 
-      {
         test = true;
         for(int i = ligneHaut ; i<= ligneBas ; i++){
-          if(tab[i][colonneDroite].type != VIDE){
+          if(tab[i][colonneDroite].type == ALIEN){
             test = false;
             break;
           }
@@ -769,10 +845,9 @@ void RechercheBordure(){
         
         if(test){
           //si oui, on retire une colonne, et on réentre dans la boucle
-          colonneDroite -= 2;
+          colonneDroite-=2;
           continue;
         }
-      }
       //Si aucun cas n'est satisfait, on quitte la boucle.
       break;
   }
