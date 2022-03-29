@@ -90,11 +90,12 @@ pthread_cond_t condScore;
 void threadVaisseau();
 void threadEvent();
 void TermEvent();
-void threadMissile(void *);
+void threadMissile(void*);
 void threadTimeOut();
 void threadInvader();
 void threadFlotteAliens();
 void threadScore();
+void threadBombe(void*);
 
 /////////////////////////////////// Fonction Perso ////////////////////////////////////////////////
 void PoseFlotte();
@@ -106,6 +107,7 @@ void freeAlien();
 void RestoreShield();
 void MajLevel(int level);
 void AfficheTab();
+void LacherBombe();
 
 /////////////////////////////////// Handler Signaux ///////////////////////////////////////////////
 void handlerSIGUSR1(int sig);
@@ -128,7 +130,10 @@ int main(int argc,char* argv[])
   srand((unsigned)time(NULL));
 
   // Ouverture de la fenetre graphique
-  printf("(MAIN %ld) Ouverture de la fenetre graphique\n",getTid()); fflush(stdout);
+  #ifdef DEBUG
+    printf("(MAIN %ld) Ouverture de la fenetre graphique\n",getTid()); fflush(stdout);
+  #endif
+  
   if (OuvertureFenetreGraphique() < 0)
   {
     printf("Erreur de OuvrirGrilleSDL\n");
@@ -246,7 +251,10 @@ void AfficheTab(){
 ////////////////////////////////////  Thread Vaisseau /////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void threadVaisseau(){
-  printf("(ThreadVaisseau %ld) Lancement du Thread\n",getTid());
+  #ifdef DEBUG
+    printf("(ThreadVaisseau %ld) Lancement du Thread\n",getTid());
+  #endif
+
   // Démasquage des signaux SIGUSR1, SIGUSR2, SIGHUP
   sigset_t masque;
   sigfillset(&masque);
@@ -256,7 +264,9 @@ void threadVaisseau(){
   sigdelset(&masque, SIGQUIT);
   sigprocmask(SIG_SETMASK, &masque, NULL);
 
-  printf("(ThreadVaisseau %ld) Init du Vaisseau\n",getTid());  
+  #ifdef DEBUG
+    printf("(ThreadVaisseau %ld) Init du Vaisseau\n",getTid()); 
+  #endif 
   mLock(&mutexGrille);
   if (tab[NB_LIGNE-1][colVaisseau].type == VIDE) 
   {
@@ -273,7 +283,10 @@ void threadVaisseau(){
     pause();
   }
 
-  printf("(ThreadVaisseau %ld) Fermeture du Thread\n",getTid()); fflush(stdout);
+  #ifdef DEBUG
+    printf("(ThreadVaisseau %ld) Fermeture du Thread\n",getTid()); fflush(stdout);
+  #endif
+
   pthread_exit(NULL);
 }
 
@@ -344,7 +357,10 @@ void handlerSIGHUP(int sig){
 }
 
 void handlerSIGQUIT(int sig){
-  printf("(ThreadVaisseau %ld) Fin ThreadVaisseau\n",getTid()); 
+  #ifdef DEBUG
+    printf("(ThreadVaisseau %ld) Fin ThreadVaisseau\n",getTid()); 
+  #endif
+  
   mLock(&mutexGrille);
     EffaceCarre(NB_LIGNE-1, colVaisseau); 
     setTab(NB_LIGNE-1,colVaisseau, VIDE,0);
@@ -359,7 +375,11 @@ void handlerSIGQUIT(int sig){
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void threadEvent(){
   pthread_cleanup_push( (void(*)(void*)) TermEvent, NULL);
-  printf("(ThreadEvent %ld) Creation ThreadEvent\n",getTid());  
+
+  #ifdef DEBUG
+    printf("(ThreadEvent %ld) Creation ThreadEvent\n",getTid());  
+  #endif
+
   EVENT_GRILLE_SDL event;
   bool ok = false;
   while(!ok)
@@ -391,9 +411,15 @@ void threadEvent(){
 
 void TermEvent(){
   // Fermeture de la fenetre
-  printf("(ThreadEvent %ld) Fermeture de la fenetre graphique...",getTid()); fflush(stdout);
+  #ifdef DEBUG
+    printf("(ThreadEvent %ld) Fermeture de la fenetre graphique...",getTid()); fflush(stdout);
+  #endif
+
   FermetureFenetreGraphique();
-  printf("OK\n");
+
+  #ifdef DEBUG
+    printf("OK\n");
+  #endif
   exit(0);
 }
 
@@ -411,33 +437,31 @@ void threadMissile(void* pos){
   sigprocmask(SIG_SETMASK, &masque, NULL);
 
   //Entrée dans la grille de jeu:
+  mLock(&mutexGrille);
   switch(tab[Position.L][Position.C].type){ 
     //Si case Vide apparition du missile
     case VIDE:  
-                mLock(&mutexGrille);
                   setTab(Position.L, Position.C, MISSILE, getTid());
                   DessineMissile(Position.L, Position.C);
-                mUnLock(&mutexGrille);
             break;
     
     //Si case Bouclier1 Transformation en Bouclier2
     case BOUCLIER1:
-                mLock(&mutexGrille);
                   setTab(Position.L, Position.C, BOUCLIER2, 0);
                   DessineBouclier(Position.L, Position.C, 2);
                 mUnLock(&mutexGrille);
                 pthread_exit(NULL);
               break;
+
     //Si case Bouclier2 Supression Bouclier2
     case BOUCLIER2:
-                mLock(&mutexGrille);
                   setTab(Position.L, Position.C, VIDE, 0);
                   EffaceCarre(Position.L, Position.C);
                 mUnLock(&mutexGrille);
                 pthread_exit(NULL);
               break;
   }
-  
+  mUnLock(&mutexGrille);
   while(Position.L > 0){
     Attente(80);
     
@@ -466,9 +490,12 @@ void threadMissile(void* pos){
             pthread_cond_signal(&condScore);
 
             RechercheBordure();
-            //AfficheTab();
-            printf("(threadMissile %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
-          
+            
+            #ifdef DEBUG
+              AfficheTab();
+              printf("(threadMissile %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+            #endif
+
           EffaceCarre(Position.L, Position.C);
         mUnLock(&mutexGrille);  
         mUnLock(&mutexFlotteAliens);
@@ -486,10 +513,29 @@ void threadMissile(void* pos){
 
           DessineMissile(Position.L, Position.C);
       }    
+
+      if(tab[Position.L-1][Position.C].type == BOMBE || tab[Position.L-1][Position.C].type == MISSILE)
+      {
+          //Tuage threadBombe
+          pthread_kill(tab[Position.L-1][Position.C].tid, SIGINT);
+
+          //Effacement Bombe
+          EffaceCarre(Position.L-1, Position.C);
+          setTab(Position.L-1, Position.C, VIDE, 0);
+
+          //Effacement du missile
+          EffaceCarre(Position.L, Position.C);
+          setTab(Position.L, Position.C, VIDE, 0);
+          
+          mUnLock(&mutexGrille);
+          mUnLock(&mutexFlotteAliens);
+          pthread_exit(NULL);
+      }    
       mUnLock(&mutexGrille);  
       mUnLock(&mutexFlotteAliens);
   }
 
+  Attente(80);
   //Supression du missile si il est arrivé tout en haut
   mLock(&mutexGrille);
     setTab(Position.L, Position.C, VIDE, 0);
@@ -501,8 +547,8 @@ void threadMissile(void* pos){
 
 ////////////////////////////////// Handler Signaux //////////////////////////////////////////////
 void handlerSIGINT(int sig){
-  mUnLock(&mutexFlotteAliens);
   mUnLock(&mutexGrille);
+  mUnLock(&mutexFlotteAliens);
   pthread_exit(NULL);
 }
 
@@ -532,7 +578,10 @@ void threadInvader(){
   mUnLock(&mutexGrille);
   
   do{
-      printf("\n(ThreadInvader %ld)... Level: %d Délai : %d...\n\n",getTid(),level, delai);
+      #ifdef DEBUG
+        printf("\n(ThreadInvader %ld)... Level: %d Délai : %d...\n\n",getTid(),level, delai);
+      #endif
+
       //Creation threadFlotteAliens
       pthread_create(&handlerFlotteAliens, NULL, (void* (*)(void*))threadFlotteAliens, NULL);
 
@@ -555,13 +604,17 @@ void threadInvader(){
             mUnLock(&mutexFlotteAliens);
             continue;
         }
-        //Si Joueur Perdu
-        printf("(ThreadInvader %ld)... PERDU ...\n",getTid());
+        
+        //Si Joueur Perdu  
         pthread_kill(tab[NB_LIGNE-1][colVaisseau].tid,SIGQUIT);
+        
+        #ifdef DEBUG
+          printf("(ThreadInvader %ld)... PERDU ...\n",getTid());
+        #endif
 
-        mUnLock(&mutexGrille);
-        mUnLock(&mutexFlotteAliens);
-        break;
+      mUnLock(&mutexGrille);
+      mUnLock(&mutexFlotteAliens);
+      break;
   }while(1);
 
   pthread_exit(NULL);
@@ -603,7 +656,12 @@ void MajLevel(int level){
 //////////////////////////////////  Thread Flotte Aliens //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void threadFlotteAliens(){
-  printf("(ThreadFlotteAliens %ld) Pose de la Flotte\n",getTid()); fflush(stdout);
+  int deplacement = 0;
+
+  #ifdef DEBUG
+    printf("(ThreadFlotteAliens %ld) Pose de la Flotte\n",getTid()); fflush(stdout);
+  #endif
+
   //Init Flotte    
   PoseFlotte();
 
@@ -615,18 +673,34 @@ void threadFlotteAliens(){
       mLock(&mutexFlotteAliens);
         mLock(&mutexGrille);
           
-          ShiftDroiteFlotte(); 
+          deplacement++;
+          ShiftDroiteFlotte();
           RechercheBordure(); //Vérification des nouvelles bordures.
-          //AfficheTab();
 
+          #ifdef DEBUG
+            AfficheTab();
+          #endif
+
+
+          #ifdef DEBUG
+            AfficheTab();
+          #endif
+
+          if(nbAliens == 0)
+          {
+            #ifdef DEBUG
+              printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
+            #endif
+
+            mUnLock(&mutexGrille);
+            mUnLock(&mutexFlotteAliens);
+            pthread_exit(NULL);
+          }
+        
+          if(deplacement%2 == 0){
+            LacherBombe();
+          }
         mUnLock(&mutexGrille);
-
-        if(nbAliens == 0)
-        {
-          printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
-          mUnLock(&mutexFlotteAliens);
-          pthread_exit(NULL);
-        }
       mUnLock(&mutexFlotteAliens);
     }
 
@@ -636,18 +710,31 @@ void threadFlotteAliens(){
       mLock(&mutexFlotteAliens);
         mLock(&mutexGrille);
           
+          deplacement++;
           ShiftGaucheFlotte();
           RechercheBordure(); //Vérification des nouvelles bordures.
-          //AfficheTab();
 
+          
+          #ifdef DEBUG
+            AfficheTab();
+          #endif
+
+
+          if(nbAliens == 0)
+          {
+            #ifdef DEBUG
+              printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
+            #endif
+
+            mUnLock(&mutexGrille);
+            mUnLock(&mutexFlotteAliens);
+            pthread_exit(NULL);
+          }
+        
+          if(deplacement%2 == 0){
+            LacherBombe();
+          }
         mUnLock(&mutexGrille);
-
-        if(nbAliens == 0)
-        {
-          printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
-          mUnLock(&mutexFlotteAliens);
-          pthread_exit(NULL);
-        }
       mUnLock(&mutexFlotteAliens);
     }
 
@@ -658,25 +745,56 @@ void threadFlotteAliens(){
         
         ShiftBasFlotte();
         RechercheBordure(); //Vérification des nouvelles bordures.
-        //AfficheTab();
+
+          #ifdef DEBUG
+            AfficheTab();
+          #endif
+
         
+        #ifdef DEBUG
+          AfficheTab();
+        #endif
+
+        if(nbAliens == 0)
+        {
+          #ifdef DEBUG
+            printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
+          #endif
+
+          mUnLock(&mutexGrille);
+          mUnLock(&mutexFlotteAliens);
+          pthread_exit(NULL);
+        }
+
+        if(ligneBas == NB_LIGNE-3)
+        {
+          #ifdef DEBUG
+            printf("(ThreadFlotteAliens %ld) %d Aliens ont envahi la terre !!!\n",getTid(), nbAliens); fflush(stdout);
+          #endif
+
+          mUnLock(&mutexGrille);
+          mUnLock(&mutexFlotteAliens);
+          pthread_exit(NULL);
+        }
+
+        if(deplacement%2 == 0){
+            LacherBombe();
+        }
+
       mUnLock(&mutexGrille);
-
-      if(nbAliens == 0)
-      {
-        printf("(ThreadFlotteAliens %ld) Tout les Aliens sont Morts\n",getTid()); fflush(stdout);
-        mUnLock(&mutexFlotteAliens);
-        pthread_exit(NULL);
-      }
-
-      if(ligneBas == NB_LIGNE-3){
-        printf("(ThreadFlotteAliens %ld) %d Aliens ont envahi la terre !!!\n",getTid(), nbAliens); fflush(stdout);
-        mUnLock(&mutexFlotteAliens);
-        pthread_exit(NULL);
-      }
     mUnLock(&mutexFlotteAliens);
+    
+    if(deplacement%2 == 0){
+      deplacement = 0;
+    }
+    else{
+      deplacement = 1;
+    }
   }
-  printf("(ThreadFlotteAliens %ld) Erreur Exit\n",getTid()); fflush(stdout);
+
+  #ifdef DEBUG
+    printf("(ThreadFlotteAliens %ld) Erreur\n",getTid()); fflush(stdout);
+  #endif
   pthread_exit(NULL);
 }
 
@@ -705,7 +823,11 @@ void PoseFlotte(){
 }
 
 
+
 void ShiftDroiteFlotte(){
+  pthread_t handler;
+  S_POSITION* Position;
+
     for(int i = ligneHaut ; i <= ligneBas ; i +=2){
       for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
         if(tab[i][j].type == ALIEN)
@@ -740,9 +862,31 @@ void ShiftDroiteFlotte(){
             mUnLock(&mutexScore);
             pthread_cond_signal(&condScore);
 
-            //Recherche Bordure ?
 
-            printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+            #ifdef DEBUG
+              printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+            #endif
+          }
+
+          //Si on tombe sur une Bombe, on 'éteint' le threadBombe correspondant, et on le crée un nouveau en dessous du tueur
+          if(tab[i][j+1].type == BOMBE)
+          {
+            //Tue la Bombe
+            pthread_kill(tab[i][j+1].tid, SIGINT);
+
+
+            //Deplacement Alien
+            EffaceCarre(i,j);
+            setTab(i,j, VIDE, 0);
+            setTab(i,j+1, ALIEN, getTid());
+            DessineAlien(i,j+1);
+
+            //Creation Nouveau ThreadBombe
+            Position = new S_POSITION;
+            Position->L = i;
+            Position->C = j+1;
+            pthread_create(&handler, NULL, (void* (*)(void*))threadBombe, (void*) Position);
+            pthread_detach(handler);
           }          
         }
       }
@@ -752,7 +896,10 @@ void ShiftDroiteFlotte(){
 }
 
 
+
 void ShiftGaucheFlotte(){
+  pthread_t handler;
+  S_POSITION* Position;
 
     for(int i = ligneHaut ; i <= ligneBas ; i +=2){
       for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
@@ -786,8 +933,32 @@ void ShiftGaucheFlotte(){
             mUnLock(&mutexScore);
             pthread_cond_signal(&condScore);
 
-            printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+
+            #ifdef DEBUG
+              printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+            #endif
           }
+
+          //Si on tombe sur une Bombe, on 'éteint' le threadBombe correspondant, et on le crée un nouveau en dessous du tueur
+          if(tab[i][j-1].type == BOMBE)
+          {
+            //Tue le threadBombe
+            pthread_kill(tab[i][j-1].tid, SIGINT);
+
+            //Deplacement Alien
+            EffaceCarre(i,j);
+            setTab(i,j, VIDE, 0);
+            setTab(i,j-1, ALIEN, getTid());
+            DessineAlien(i,j-1);
+
+
+            //Creation Nouveau ThreadBombe
+            Position = new S_POSITION;
+            Position->L = i;
+            Position->C = j-1;
+            pthread_create(&handler, NULL, (void* (*)(void*))threadBombe, (void*) Position);
+            pthread_detach(handler);
+          } 
         }
       }
     }
@@ -798,6 +969,9 @@ void ShiftGaucheFlotte(){
 
 
 void ShiftBasFlotte(){
+  pthread_t handler;
+  S_POSITION* Position;
+
     for(int i = ligneHaut ; i <= ligneBas ; i +=2){
       for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
         if(tab[i][j].type == ALIEN)
@@ -831,13 +1005,76 @@ void ShiftBasFlotte(){
             mUnLock(&mutexScore);
             pthread_cond_signal(&condScore);
 
-            printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+
+            #ifdef DEBUG
+              printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+            #endif
+          }
+
+          //Si on tombe sur une Bombe, on 'éteint' le threadBombe correspondant, et on le crée un nouveau en dessous du tueur
+          if(tab[i+1][j].type == BOMBE)
+          {
+            //Tue le Thread Bombe
+            pthread_kill(tab[i+1][j].tid, SIGINT);
+
+            //Deplacement Alien
+            EffaceCarre(i,j);
+            setTab(i,j, VIDE, 0);
+            setTab(i+1,j, ALIEN, getTid());
+            DessineAlien(i+1,j);
+
+            //Creation Nouveau ThreadBombe
+            Position = new S_POSITION;
+            Position->L = i+1;
+            Position->C = j;
+            
+            pthread_create(&handler, NULL, (void* (*)(void*))threadBombe, (void*) Position);
+            pthread_detach(handler);
           }
         }
       }
     }
   ligneBas++;
   ligneHaut++;
+}
+
+void LacherBombe(){
+  int random;
+  bool stop;
+  int  i,j,k;
+  pthread_t handler;
+  S_POSITION* Position = new S_POSITION;
+
+    stop = false;
+    random = rand()%nbAliens+1;
+    k = 0;
+
+    //Recherche d'un Alien aux hazards dans les aliens vivant
+    for(i = 0 ; i <= ligneBas; i++){
+      for(j = 8 ; j <= colonneDroite; j++){
+        if(tab[i][j].type == ALIEN){ //Si un élément est un alien on incrémente k (le nombre d'alien déjà rencontré)
+          k++;
+
+          if(k == random){ //Si en plus, le nombre d'alien déjà rencontré est égale au numéro d'alien prit alléatoirement, alors on sort de la boucle
+            stop = true;
+            break;
+          }
+        }
+      }
+      if(stop == true) break;
+    }
+
+  if(stop == false){
+    printf("Erreur, aucune Bombe Lancée car erreur de recherche random\n");
+    printf("i = %d;\nj = %d;\nrandom = %d;\nk = %d;\n",i,j,random,k);
+    exit(2);
+  }
+
+  Position->L = i;
+  Position->C = j;
+
+  pthread_create(&handler, NULL, (void* (*)(void*))threadBombe, (void*) Position);
+  pthread_detach(handler);
 }
 
 void RechercheBordure(){
@@ -913,6 +1150,11 @@ void RechercheBordure(){
       //Si aucun cas n'est satisfait, on quitte la boucle.
       break;
   }
+
+  #ifdef DEBUG
+    printf("ligneHaut = %d, ligneBas = %d, ColGauche = %d, ColDroite = %d\n", ligneHaut, ligneBas, colonneGauche, colonneDroite);
+    fflush(stdout);
+  #endif
 }
 
 
@@ -921,30 +1163,186 @@ void RechercheBordure(){
 //////////////////////////////////////  Thread Score //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void threadScore(){
-  printf("(threadScore %ld) Score: %d \n",getTid(), Score);
+  #ifdef DEBUG
+    printf("(threadScore %ld) Score: %d \n",getTid(), Score);
+  #endif
 
   DessineChiffre(10,2,0);
   DessineChiffre(10,3,0);
   DessineChiffre(10,4,0);
   DessineChiffre(10,5,0);
 
+  //Init Score 0
   Score = 0;
-  MajScore = true;
+  MajScore = false;
 
   while(1){
     mLock(&mutexScore);
-    while(MajScore){
+    while(!MajScore){ //Tant que MajScore est False...
       pthread_cond_wait(&condScore, &mutexScore);
 
-      printf("(threadScore %ld) Score: %d \n",getTid(), Score);
+      #ifdef DEBUG
+        printf("(threadScore %ld) Score: %d \n",getTid(), Score);
+      #endif
 
       DessineChiffre(10,2, Score/1000);
       DessineChiffre(10,3, (Score%1000)/100);
       DessineChiffre(10,4, ((Score%1000)%100)/10);
-      DessineChiffre(10,5, ((Score%1000)%100)%10);
+      DessineChiffre(10,5, ((Score%1000)%100)%10); //Mise à jour Graphique du Score
     }
-    MajScore = false;
+    MajScore = false; //Reset MajScore
     mUnLock(&mutexScore);
   }
+  pthread_exit(NULL);
+}
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////  Thread Bombe //////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void threadBombe(void* pos){
+  sigset_t masque;
+  S_POSITION Position = *((S_POSITION*)pos);
+  free(pos);
+
+  sigfillset(&masque);
+  sigdelset(&masque, SIGINT);
+  sigprocmask(SIG_SETMASK, &masque, NULL);
+
+  #ifdef DEBUG
+    printf("(threadBombe %ld) Lancement Bombe: L=%d C=%d\n",getTid(), Position.L+1, Position.C);
+  #endif
+
+  mLock(&mutexGrille);
+    switch(tab[Position.L+1][Position.C].type){
+      case VIDE:
+                setTab(Position.L+1, Position.C, BOMBE, getTid());
+                DessineBombe(Position.L+1, Position.C);
+              break;
+
+      case BOMBE:
+                mUnLock(&mutexGrille);
+                pthread_exit(NULL);
+              break;
+
+      case MISSILE:
+                pthread_kill(tab[Position.L+1][Position.C].tid, SIGINT); //Supression Missile
+
+                setTab(Position.L+1, Position.C, VIDE, 0);   //Effacement Missile
+                EffaceCarre(Position.L+1, Position.C);
+
+                mUnLock(&mutexGrille);
+                pthread_exit(NULL);
+              break;
+
+      case BOUCLIER1:
+                setTab(Position.L+1, Position.C, BOUCLIER2, 0);
+                DessineBouclier(Position.L+1, Position.C, 2);
+
+                mUnLock(&mutexGrille);
+                pthread_exit(NULL);
+              break;
+
+      case BOUCLIER2:
+                setTab(Position.L+1, Position.C, VIDE, 0);
+                EffaceCarre(Position.L+1, Position.C);
+
+                mUnLock(&mutexGrille);
+                pthread_exit(NULL);
+              break;
+      case ALIEN:
+                DessineBombe(Position.L+1, Position.C);
+              break;
+      default:
+        printf("Erreur Creation Bombe, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
+        AfficheTab();
+        exit(1);
+    }
+
+    Position.L++;
+  mUnLock(&mutexGrille);
+
+
+  while(Position.L<NB_LIGNE-1)
+  {
+    Attente(160);
+
+    mLock(&mutexGrille);
+
+      //Si c'est un Alien on Attend
+      if(tab[Position.L+1][Position.C].type == ALIEN){
+        mUnLock(&mutexGrille);
+        continue;
+      }
+      
+      //Si Non
+      setTab(Position.L, Position.C, VIDE, 0);   //Effacement Bombe
+      EffaceCarre(Position.L, Position.C);
+
+      switch(tab[Position.L+1][Position.C].type){
+        case VIDE:
+                  setTab(Position.L+1, Position.C, BOMBE, getTid());  //Affichage Bombe
+                  DessineBombe(Position.L+1, Position.C);
+                break;
+
+        case MISSILE:
+                  pthread_kill(tab[Position.L+1][Position.C].tid, SIGINT); //Supression Missile
+
+                  setTab(Position.L+1, Position.C, VIDE, 0);   //Effacement Missile
+                  EffaceCarre(Position.L+1, Position.C);
+
+                  mUnLock(&mutexGrille);
+                  pthread_exit(NULL);
+                break;
+
+        case BOUCLIER1:
+                  setTab(Position.L+1, Position.C, BOUCLIER2, 0); //Changement etat vers Bouclier2
+                  DessineBouclier(Position.L+1, Position.C, 2);
+
+                  mUnLock(&mutexGrille);
+                  pthread_exit(NULL);
+                break;
+
+        case BOUCLIER2:
+                  setTab(Position.L+1, Position.C, VIDE, 0); //Effacement Bouclier
+                  EffaceCarre(Position.L+1, Position.C);
+
+                  mUnLock(&mutexGrille);
+                  pthread_exit(NULL);
+                break;
+
+        case VAISSEAU:
+                  pthread_kill(tab[Position.L+1][Position.C].tid, SIGQUIT);
+                  EffaceCarre(Position.L+1, Position.C);
+
+                  mUnLock(&mutexGrille);
+                  pthread_exit(NULL);
+                break;
+
+        case BOMBE:
+                setTab(Position.L, Position.C, VIDE, 0);
+                EffaceCarre(Position.L, Position.C);
+                mUnLock(&mutexGrille);
+                pthread_exit(NULL);
+              break;
+
+        default:
+          printf("Erreur Deplacement Bombe, Type Inconnus\n");
+          exit(1);
+      }
+      Position.L++;
+    mUnLock(&mutexGrille);    
+  }
+
+  Attente(160);
+  mLock(&mutexGrille);
+    setTab(Position.L, Position.C, VIDE, 0);   //Effacement Bombe
+    EffaceCarre(Position.L, Position.C);
+  mUnLock(&mutexGrille);
+
+  #ifdef DEBUG
+    printf("(threadBombe %ld) Bombe Arrivée en fin de Tableau\n",getTid());
+  #endif
   pthread_exit(NULL);
 }

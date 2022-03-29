@@ -22,6 +22,11 @@ obj/Ressources.o:	Ressources/Ressources.cpp Ressources/Ressources.h
 obj/MyLib.o:	MyLibThread_POSIX/mylibthread_POSIX.h MyLibThread_POSIX/mylibthread_POSIX.cpp
 				echo Creation de MyLib.o ...
 				g++ -c MyLibThread_POSIX/mylibthread_POSIX.cpp -o obj/MyLib.o -lpthread
+				
+
+DEBUG:	SpaceInvaders.cpp obj/MyLib.o obj/GrilleSDL.o obj/Ressources.o
+					echo Creation de SpaceInvadersDebug...
+					g++ -DSUN -D DEBUG -I ./GrilleSDL -I ./Ressources -I ./MyLibThread_POSIX SpaceInvaders.cpp obj/MyLib.o obj/GrilleSDL.o obj/Ressources.o -lrt -lpthread -lSDL -o SpaceInvaders.app 
 
 clean:
 	rm obj/Ressources.o
