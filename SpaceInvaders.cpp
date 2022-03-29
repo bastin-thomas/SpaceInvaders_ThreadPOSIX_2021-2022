@@ -545,7 +545,6 @@ void threadMissile(void* pos){
   pthread_exit(NULL);
 }
 
-
 ////////////////////////////////// Handler Signaux //////////////////////////////////////////////
 void handlerSIGINT(int sig){
   mUnLock(&mutexGrille);
@@ -682,6 +681,11 @@ void threadFlotteAliens(){
             AfficheTab();
           #endif
 
+
+          #ifdef DEBUG
+            AfficheTab();
+          #endif
+
           if(nbAliens == 0)
           {
             #ifdef DEBUG
@@ -709,10 +713,12 @@ void threadFlotteAliens(){
           deplacement++;
           ShiftGaucheFlotte();
           RechercheBordure(); //Vérification des nouvelles bordures.
+
           
           #ifdef DEBUG
             AfficheTab();
           #endif
+
 
           if(nbAliens == 0)
           {
@@ -739,6 +745,11 @@ void threadFlotteAliens(){
         
         ShiftBasFlotte();
         RechercheBordure(); //Vérification des nouvelles bordures.
+
+          #ifdef DEBUG
+            AfficheTab();
+          #endif
+
         
         #ifdef DEBUG
           AfficheTab();
@@ -851,6 +862,7 @@ void ShiftDroiteFlotte(){
             mUnLock(&mutexScore);
             pthread_cond_signal(&condScore);
 
+
             #ifdef DEBUG
               printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
             #endif
@@ -920,6 +932,7 @@ void ShiftGaucheFlotte(){
               MajScore = true;
             mUnLock(&mutexScore);
             pthread_cond_signal(&condScore);
+
 
             #ifdef DEBUG
               printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
@@ -991,6 +1004,7 @@ void ShiftBasFlotte(){
               MajScore = true;
             mUnLock(&mutexScore);
             pthread_cond_signal(&condScore);
+
 
             #ifdef DEBUG
               printf("(ThreadFlotteAliens %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
@@ -1181,6 +1195,7 @@ void threadScore(){
   }
   pthread_exit(NULL);
 }
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
