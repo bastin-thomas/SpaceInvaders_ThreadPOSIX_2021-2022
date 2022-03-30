@@ -77,17 +77,22 @@ int colonneDroite = 18;   //ColonneDroite
 int Score = 0;
 bool MajScore;
 
+int nbVies = 3;
+
 ///////////////////////////////////       Mutex      //////////////////////////////////////////////
 pthread_mutex_t mutexGrille;
 pthread_mutex_t mutexFireOn;
 pthread_mutex_t mutexFlotteAliens;
 pthread_mutex_t mutexScore;
+pthread_mutex_t mutexVies;
 
 /////////////////////////////////// Variables Conditions //////////////////////////////////////////
 pthread_cond_t condScore;
+pthread_cond_t condVies;
 
 /////////////////////////////////// Fonction Thread ///////////////////////////////////////////////
 void threadVaisseau();
+void TermVaisseau();
 void threadEvent();
 void TermEvent();
 void threadMissile(void*);
@@ -108,6 +113,7 @@ void RestoreShield();
 void MajLevel(int level);
 void AfficheTab();
 void LacherBombe();
+void MajVies();
 
 /////////////////////////////////// Handler Signaux ///////////////////////////////////////////////
 void handlerSIGUSR1(int sig);
@@ -146,9 +152,12 @@ int main(int argc,char* argv[])
     for (int c=0 ; c<NB_COLONNE ; c++)
       setTab(l,c);
 
-  // Initialisation des boucliers
+  // Initialisation des boucliers:
   RestoreShield();
 
+  //Initialisation des Vies:
+  DessineVaisseau(16,3);
+  DessineVaisseau(16,4);
 
   // Initialisation des mutex et variables de condition
   if((error = mInitDef(&mutexGrille)) != 0){
@@ -166,10 +175,21 @@ int main(int argc,char* argv[])
     fflush(stdout);
   }
 
+  if((error = mInitDef(&mutexVies)) != 0){
+    printf("(MAIN %ld) Erreur Initialisation mutexVies: %d\n",getTid(),error); 
+    fflush(stdout);
+  }
+
   if((error = pthread_cond_init(&condScore, NULL)) != 0){
     printf("(MAIN %ld) Erreur Initialisation condScore: %d\n",getTid(),error); 
     fflush(stdout);
   }
+
+  if((error = pthread_cond_init(&condVies, NULL)) != 0){
+    printf("(MAIN %ld) Erreur Initialisation condVies: %d\n",getTid(),error); 
+    fflush(stdout);
+  }
+
 
   // Masquage de tout les signaux (pour éviter d'avoir des threads qui reçoivent les mauvais)
   sigfillset(&masque);
@@ -227,7 +247,51 @@ int main(int argc,char* argv[])
   pthread_create(&handler, NULL, (void* (*)(void*))threadScore, NULL);
   pthread_detach(handler);
 
+  while(1)
+  {
+    mLock(&mutexVies);
+    while(nbVies>0)
+    {
+      pthread_cond_wait(&condVies, &mutexVies);
+
+      if(nbVies != 0)
+      {
+        //Lancement ThreadVaisseau:
+        pthread_create(&handler, NULL, (void* (*)(void*))threadVaisseau, NULL);
+        pthread_detach(handler);
+        MajVies();
+      }
+    }
+    mUnLock(&mutexVies);
+
+    if(nbVies == 0) break;
+  }
+
+    mLock(&mutexGrille);
+      //Suppression Grille Jeux
+      freeAlien();
+
+      //Supressions Des Boucliers
+      for(int i = 11 ; i<NB_COLONNE ; i++){
+        if(tab[NB_LIGNE-2][i].type == BOUCLIER1 || tab[NB_LIGNE-2][i].type == BOUCLIER2){
+          setTab(NB_LIGNE-2, i, VIDE, 0);
+          EffaceCarre(NB_LIGNE-2, i);
+        }
+      }
+
+      DessineGameOver(6,11);
+    mLock(&mutexGrille);
+
   pthread_exit(NULL);
+}
+
+void MajVies(){
+  if(nbVies == 2){
+    EffaceCarre(16,4);
+  }
+  if(nbVies == 1){
+    EffaceCarre(16,3);
+  }
 }
 
 
@@ -255,6 +319,8 @@ void threadVaisseau(){
     printf("(ThreadVaisseau %ld) Lancement du Thread\n",getTid());
   #endif
 
+  pthread_cleanup_push( (void (*)(void*)) TermVaisseau, NULL);
+
   // Démasquage des signaux SIGUSR1, SIGUSR2, SIGHUP
   sigset_t masque;
   sigfillset(&masque);
@@ -267,6 +333,10 @@ void threadVaisseau(){
   #ifdef DEBUG
     printf("(ThreadVaisseau %ld) Init du Vaisseau\n",getTid()); 
   #endif 
+
+  colVaisseau = 15;
+
+
   mLock(&mutexGrille);
   if (tab[NB_LIGNE-1][colVaisseau].type == VIDE) 
   {
@@ -279,7 +349,8 @@ void threadVaisseau(){
   mUnLock(&mutexGrille);
   
   //Attente Signal
-  while(1){
+  while(1)
+  {
     pause();
   }
 
@@ -287,9 +358,20 @@ void threadVaisseau(){
     printf("(ThreadVaisseau %ld) Fermeture du Thread\n",getTid()); fflush(stdout);
   #endif
 
+  pthread_cleanup_pop(1);
   pthread_exit(NULL);
 }
 
+void TermVaisseau(){
+  #ifdef DEBUG
+    printf("(ThreadVaisseau %ld) Mort du Vaisseau\n",getTid()); 
+  #endif 
+
+  mLock(&mutexVies);
+    nbVies--;
+    pthread_cond_signal(&condVies);
+  mUnLock(&mutexVies);
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////  Handler Signaux /////////////////////////////////////////////
@@ -614,7 +696,6 @@ void threadInvader(){
 
       mUnLock(&mutexGrille);
       mUnLock(&mutexFlotteAliens);
-      break;
   }while(1);
 
   pthread_exit(NULL);
@@ -628,7 +709,7 @@ void freeAlien(){
         EffaceCarre(i,j);
       }
 
-      if(tab[i][j].type == MISSILE){
+      if(tab[i][j].type == MISSILE || tab[i][j].type == BOMBE){
         pthread_kill(tab[i][j].tid, SIGINT);
         setTab(i,j,VIDE,0);
         EffaceCarre(i,j);
@@ -785,10 +866,10 @@ void threadFlotteAliens(){
     mUnLock(&mutexFlotteAliens);
     
     if(deplacement%2 == 0){
-      deplacement = 0;
+      deplacement = 1;
     }
     else{
-      deplacement = 1;
+      deplacement = 0;
     }
   }
 
@@ -972,8 +1053,8 @@ void ShiftBasFlotte(){
   pthread_t handler;
   S_POSITION* Position;
 
-    for(int i = ligneHaut ; i <= ligneBas ; i +=2){
-      for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
+    for(int i = ligneBas ; i >= ligneHaut ; i -=2){
+      for(int j = colonneDroite ; j >= colonneGauche ; j -=2){
         if(tab[i][j].type == ALIEN)
         {  
           //Si on tombe sur une case vide, on se déplace juste
@@ -1038,6 +1119,8 @@ void ShiftBasFlotte(){
   ligneHaut++;
 }
 
+
+
 void LacherBombe(){
   int random;
   bool stop;
@@ -1046,7 +1129,7 @@ void LacherBombe(){
   S_POSITION* Position = new S_POSITION;
 
     stop = false;
-    random = rand()%nbAliens+1;
+    random = (rand() % nbAliens)+1;
     k = 0;
 
     //Recherche d'un Alien aux hazards dans les aliens vivant
@@ -1066,7 +1149,7 @@ void LacherBombe(){
 
   if(stop == false){
     printf("Erreur, aucune Bombe Lancée car erreur de recherche random\n");
-    printf("i = %d;\nj = %d;\nrandom = %d;\nk = %d;\n",i,j,random,k);
+    printf("i = %d;\nj = %d;\nrandom = %d;\nk = %d;\nnbAlien = %d;\n",i,j,random,k,nbAliens);
     exit(2);
   }
 
@@ -1252,7 +1335,6 @@ void threadBombe(void* pos){
                 pthread_exit(NULL);
               break;
       case ALIEN:
-                DessineBombe(Position.L+1, Position.C);
               break;
       default:
         printf("Erreur Creation Bombe, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
@@ -1346,3 +1428,12 @@ void threadBombe(void* pos){
   #endif
   pthread_exit(NULL);
 }
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////  Thread Vie   //////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
