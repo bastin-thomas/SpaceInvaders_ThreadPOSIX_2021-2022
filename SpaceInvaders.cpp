@@ -101,6 +101,7 @@ void threadInvader();
 void threadFlotteAliens();
 void threadScore();
 void threadBombe(void*);
+void threadVaisseauAmiral();
 
 /////////////////////////////////// Fonction Perso ////////////////////////////////////////////////
 void PoseFlotte();
@@ -750,7 +751,9 @@ void threadFlotteAliens(){
   while(1){
     while(colonneDroite < NB_COLONNE-1)
     {
+      
       Attente(delai);
+      
       mLock(&mutexFlotteAliens);
         mLock(&mutexGrille);
           
@@ -787,14 +790,15 @@ void threadFlotteAliens(){
 
     while(colonneGauche > 8 )
     {
+     
       Attente(delai);
+     
       mLock(&mutexFlotteAliens);
         mLock(&mutexGrille);
           
           deplacement++;
           ShiftGaucheFlotte();
           RechercheBordure(); //Vérification des nouvelles bordures.
-
           
           #ifdef DEBUG
             AfficheTab();
@@ -819,8 +823,9 @@ void threadFlotteAliens(){
       mUnLock(&mutexFlotteAliens);
     }
 
-    Attente(delai);
 
+    Attente(delai);
+   
     mLock(&mutexFlotteAliens);
       mLock(&mutexGrille);
         
@@ -982,8 +987,8 @@ void ShiftGaucheFlotte(){
   pthread_t handler;
   S_POSITION* Position;
 
-    for(int i = ligneHaut ; i <= ligneBas ; i +=2){
-      for(int j = colonneGauche ; j <= colonneDroite ; j +=2){
+    for(int i = ligneBas ; i >= ligneHaut ; i -=2){
+      for(int j = colonneDroite ; j >=  colonneGauche ; j -=2){
         if(tab[i][j].type == ALIEN)
         {  
           //Si on tombe sur une case vide, on se déplace juste
@@ -1005,6 +1010,7 @@ void ShiftGaucheFlotte(){
             EffaceCarre(i,j-1);
             setTab(i,j, VIDE, 0);
             setTab(i,j-1, VIDE, 0);
+
             nbAliens --;
 
             //Réveil Thread Score pour l'affichage + Incrément de 1.
@@ -1429,11 +1435,12 @@ void threadBombe(void* pos){
   pthread_exit(NULL);
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////  Thread Vie   //////////////////////////////////////////////
+////////////////////////////////  Thread Vaisseau Amiral  /////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void threadVaisseauAmiral(){
+  #ifdef DEBUG
+    printf("(threadVaisseauAmiral %ld) Démarage threadVaisseauAmiral\n",getTid());
+  #endif
+}
 
