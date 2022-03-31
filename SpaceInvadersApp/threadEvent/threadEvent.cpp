@@ -33,6 +33,8 @@ void threadEvent(){
                       //printf("(ThreadEvent %ld) Espace enfoncée\n",getTid());
                       kill(getpid(),SIGHUP);
                     break;
+        default:
+              break;
       }
     }
   }

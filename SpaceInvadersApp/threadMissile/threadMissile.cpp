@@ -49,9 +49,11 @@ void threadMissile(void* pos){
             break;
 
     default:
-          printf("Erreur Creation Missile, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
-          AfficheTab();
-          exit(1);
+          #ifdef DEBUG
+            printf("Erreur Creation Missile, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
+            AfficheTab();
+            exit(1);
+          #endif
         break;
   }
   mUnLock(&mutexGrille);
@@ -105,7 +107,7 @@ void threadMissile(void* pos){
                       mUnLock(&mutexGrille);  
                       mUnLock(&mutexFlotteAliens);
                       pthread_exit(NULL);
-                  break;
+                    break;
 
 
             case BOMBE:
@@ -148,9 +150,11 @@ void threadMissile(void* pos){
                         pthread_exit(NULL);
                       break;
             default:
-                  printf("Erreur Deplacement Missile, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
-                  AfficheTab();
-                  exit(1);
+                  #ifdef DEBUG
+                    printf("Erreur Deplacement Missile, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
+                    AfficheTab();
+                    exit(1);
+                  #endif
                 break;
         }
       mUnLock(&mutexGrille);  

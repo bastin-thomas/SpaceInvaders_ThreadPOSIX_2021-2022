@@ -207,7 +207,6 @@ void ShiftDroiteFlotte(){
             //Tue la Bombe
             pthread_kill(tab[i][j+1].tid, SIGINT);
 
-
             //Deplacement Alien
             EffaceCarre(i,j);
             setTab(i,j, VIDE, 0);

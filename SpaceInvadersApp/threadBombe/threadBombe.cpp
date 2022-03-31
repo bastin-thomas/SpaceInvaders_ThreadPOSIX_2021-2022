@@ -56,9 +56,12 @@ void threadBombe(void* pos){
       case ALIEN:
               break;
       default:
-        printf("Erreur Creation Bombe, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
-        AfficheTab();
-        exit(1);
+            #ifdef DEBUG
+              printf("Erreur Creation Bombe, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
+              AfficheTab();
+              exit(1);
+            #endif
+          break;
     }
     Position.L++;
   mUnLock(&mutexGrille);
@@ -128,9 +131,12 @@ void threadBombe(void* pos){
               break;
 
         default:
-          printf("Erreur Deplacement Bombe, Type Inconnus\n");
-          AfficheTab();
-          exit(1);
+              #ifdef DEBUG
+                printf("Erreur Deplacement Bombe, Type Inconnus\n");
+                AfficheTab();
+                exit(1);
+              #endif
+            break;  
       }
       Position.L++;
     mUnLock(&mutexGrille);    
