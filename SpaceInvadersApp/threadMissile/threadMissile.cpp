@@ -11,6 +11,7 @@ void threadMissile(void* pos){
   sigdelset(&masque, SIGINT);
   sigprocmask(SIG_SETMASK, &masque, NULL);
 
+
   //Entrée dans la grille de jeu:
   mLock(&mutexGrille);
   switch(tab[Position.L][Position.C].type){ 
@@ -35,79 +36,123 @@ void threadMissile(void* pos){
                 mUnLock(&mutexGrille);
                 pthread_exit(NULL);
               break;
+
+    case MISSILE:
+    case BOMBE:
+              pthread_kill(tab[Position.L][Position.C].tid, SIGINT);
+
+              //Effacement Bombe / Missile
+              EffaceCarre(Position.L, Position.C);
+              setTab(Position.L, Position.C, VIDE, 0);
+              mUnLock(&mutexGrille);
+              pthread_exit(NULL);
+            break;
+
+    default:
+          printf("Erreur Creation Missile, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
+          AfficheTab();
+          exit(1);
+        break;
   }
   mUnLock(&mutexGrille);
+
 
 
   while(Position.L > 0){
     Attente(80);
     
-    //Supression du missile si il tombe sur un Alien
+    //Supression du missile si il tombe sur ...
     mLock(&mutexFlotteAliens);
-    mLock(&mutexGrille);
-    
-      if(tab[Position.L-1][Position.C].type == ALIEN)
-      {
-        
-          //Avance du missile d'une case
-          EffaceCarre(Position.L, Position.C);
+      mLock(&mutexGrille);
+        switch(tab[Position.L-1][Position.C].type){
+            case VIDE:
+                      //Avance du missile d'une case
+                      EffaceCarre(Position.L, Position.C);
+                      setTab(Position.L, Position.C, VIDE, 0);
+                      
+                      setTab(Position.L-1, Position.C, MISSILE, getTid());
+                      DessineMissile(Position.L-1, Position.C);
 
-          setTab(Position.L, Position.C, VIDE, 0);
-          Position.L--;
-          setTab(Position.L, Position.C, VIDE, 0);
-          
-          
-            nbAliens--;
+                      Position.L--; //Decalage du Missile
+                    break;
 
-            //Réveil Thread Score pour l'affichage + Incrément de 1.
-            mLock(&mutexScore);
-              Score++;
-              MajScore = true;
-            mUnLock(&mutexScore);
-            pthread_cond_signal(&condScore);
 
-            RechercheBordure();
-            
-            #ifdef DEBUG
-              AfficheTab();
-              printf("(threadMissile %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
-            #endif
+            case ALIEN:
+                      //Avance du missile d'une case
+                      EffaceCarre(Position.L, Position.C);
+                      setTab(Position.L, Position.C, VIDE, 0);
+                     
+                      setTab(Position.L-1, Position.C, VIDE, 0); 
+                      EffaceCarre(Position.L-1, Position.C);
 
-          EffaceCarre(Position.L, Position.C);
-        mUnLock(&mutexGrille);  
-        mUnLock(&mutexFlotteAliens);
-        pthread_exit(NULL);
-      }
+                      nbAliens--;
 
-      if(tab[Position.L-1][Position.C].type == VIDE)
-      {
-          //Avance du missile d'une case
-          EffaceCarre(Position.L, Position.C);
 
-          setTab(Position.L, Position.C, VIDE, 0);
-          Position.L--;
-          setTab(Position.L, Position.C, MISSILE, getTid());
+                        //Réveil Thread Score pour l'affichage + Incrément de 1.
+                        mLock(&mutexScore);
+                          Score++;
+                          MajScore = true;
+                        mUnLock(&mutexScore);
+                        pthread_cond_signal(&condScore);
 
-          DessineMissile(Position.L, Position.C);
-      }    
+                        RechercheBordure();
+                        
+                        #ifdef DEBUG
+                          AfficheTab();
+                          printf("(threadMissile %ld) Un Aliens est Mort, Il reste %d Aliens\n",getTid(), nbAliens); fflush(stdout);
+                        #endif
+                          
+                      mUnLock(&mutexGrille);  
+                      mUnLock(&mutexFlotteAliens);
+                      pthread_exit(NULL);
+                  break;
 
-      if(tab[Position.L-1][Position.C].type == BOMBE || tab[Position.L-1][Position.C].type == MISSILE)
-      {
-          //Tuage threadBombe
-          pthread_kill(tab[Position.L-1][Position.C].tid, SIGINT);
 
-          //Effacement Bombe
-          EffaceCarre(Position.L-1, Position.C);
-          setTab(Position.L-1, Position.C, VIDE, 0);
+            case BOMBE:
+            case MISSILE:
+                         //Tuage threadBombe / Missile
+                        pthread_kill(tab[Position.L-1][Position.C].tid, SIGINT);
 
-          //Effacement du missile
-          EffaceCarre(Position.L, Position.C);
-          setTab(Position.L, Position.C, VIDE, 0);
-          
-          mUnLock(&mutexGrille);
-          mUnLock(&mutexFlotteAliens);
-          pthread_exit(NULL);
-      }    
+                        //Effacement Bombe / Missile
+                        EffaceCarre(Position.L-1, Position.C);
+                        setTab(Position.L-1, Position.C, VIDE, 0);
+
+                        //Effacement du Missile Courant
+                        EffaceCarre(Position.L, Position.C);
+                        setTab(Position.L, Position.C, VIDE, 0);
+                        
+                        mUnLock(&mutexGrille);
+                        mUnLock(&mutexFlotteAliens);
+                        pthread_exit(NULL);
+                      break;
+
+
+            case AMIRAL:
+                        //Effacement du missile
+                        EffaceCarre(Position.L, Position.C);
+                        setTab(Position.L, Position.C, VIDE, 0);
+
+                        //Envoie SIGCHILD à Amiral
+                        pthread_kill(tab[Position.L-1][Position.C].tid, SIGCHLD);
+
+                        //Réveil Thread Score pour l'affichage + Incrément de 10.
+                        mLock(&mutexScore);
+                          Score+=10;
+                          MajScore = true;
+
+                          pthread_cond_signal(&condScore);
+                        mUnLock(&mutexScore);
+
+                        mUnLock(&mutexGrille);
+                        mUnLock(&mutexFlotteAliens);
+                        pthread_exit(NULL);
+                      break;
+            default:
+                  printf("Erreur Deplacement Missile, Type Inconnus, L = %d, C = %d\n", Position.L, Position.C);
+                  AfficheTab();
+                  exit(1);
+                break;
+        }
       mUnLock(&mutexGrille);  
       mUnLock(&mutexFlotteAliens);
   }

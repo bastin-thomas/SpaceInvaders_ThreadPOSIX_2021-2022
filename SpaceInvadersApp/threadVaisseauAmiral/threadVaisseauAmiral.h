@@ -5,4 +5,14 @@
 
 void threadVaisseauAmiral();
 
+void Deplacement();
+
+void DeplacementGauche();
+
+void DeplacementDroite();
+
+void handlerSIGALRM(int sig);
+
+void handlerSIGCHLD(int sig);
+
 #endif

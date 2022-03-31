@@ -11,6 +11,7 @@ void threadEvent(){
 
   EVENT_GRILLE_SDL event;
   bool ok = false;
+  
   while(!ok)
   {
     event = ReadEvent();

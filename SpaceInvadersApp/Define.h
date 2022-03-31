@@ -33,7 +33,6 @@
 #define BOUCLIER2   6
 #define AMIRAL      7
 
-
 // Type Personnalisé (Structure)
 typedef struct
 {
@@ -47,6 +46,33 @@ typedef struct
   int C;
 } S_POSITION;
 
+//1000
 #define DELAI 1000
+
+//200
+#define DELAI_AMIRAL 200
+
+//600
+#define DELAI_TIME_OUT 600
+
+//160
+#define DELAI_BOMBE 160
+
+#define LIGNEAMIRAL 0
+
+//#define DEBUG
+
+
+
+// Quelques Fonctions de Bases
+void Attente(int milli);
+
+void setTab(int l,int c,int type=VIDE,pthread_t tid=0);
+
+void freeAlien(); //Supprime les Aliens, Missiles et Bombes de la grille du Jeu
+
+void AfficheTab();  //Affiche en console la grille de jeu
+
+void MajVies();   //Met à jour l'affichage de la vie selon nbVies
 
 #endif

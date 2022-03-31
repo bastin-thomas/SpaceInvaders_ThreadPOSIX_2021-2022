@@ -2,7 +2,6 @@
 #define GLOBVAR_H 
 
 #include "Define.h"
-#include "./fonctionPerso.h"
 
 /////////////////////////////////// Variables Globales ////////////////////////////////////////////
 
@@ -24,7 +23,8 @@ extern bool MajScore;
 
 extern int nbVies;
 
-
+extern int PlacementAmiral;
+extern bool AmiralExist;
 
 ///////////////////////////////////       Mutex      //////////////////////////////////////////////
 extern pthread_mutex_t mutexGrille;
@@ -38,5 +38,6 @@ extern pthread_mutex_t mutexVies;
 /////////////////////////////////// Variables Conditions //////////////////////////////////////////
 extern pthread_cond_t condScore;
 extern pthread_cond_t condVies;
+extern pthread_cond_t condFlotteAliens;
 
 #endif

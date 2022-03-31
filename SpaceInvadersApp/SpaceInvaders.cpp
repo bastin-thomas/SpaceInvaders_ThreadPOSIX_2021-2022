@@ -1,5 +1,4 @@
 #include "Define.h"
-#include "fonctionPerso.h"
 
 /////////////////////////////////// Variables Globales ////////////////////////////////////////////
 
@@ -21,6 +20,8 @@ bool MajScore;
 
 int nbVies = 3;
 
+int PlacementAmiral;
+bool AmiralExist;
 
 ///////////////////////////////////////////  Mutex  ///////////////////////////////////////////////
 pthread_mutex_t mutexGrille;
@@ -33,6 +34,7 @@ pthread_mutex_t mutexVies;
 /////////////////////////////////// Variables Conditions //////////////////////////////////////////
 pthread_cond_t condScore;
 pthread_cond_t condVies;
+pthread_cond_t condFlotteAliens;
 
 /////////////////////////////////// Fonction Thread ///////////////////////////////////////////////
 #include "./threadVaisseau/threadVaisseau.h"
@@ -81,35 +83,55 @@ int main(int argc,char* argv[])
   DessineVaisseau(16,3);
   DessineVaisseau(16,4);
 
-  // Initialisation des mutex et variables de condition
+  // Initialisation des mutex
   if((error = mInitDef(&mutexGrille)) != 0){
     printf("(MAIN %ld) Erreur Initialisation mutexGrille: %d\n",getTid(),error); 
     fflush(stdout);
+    exit(2);
   }
 
   if((error = mInitDef(&mutexFireOn)) != 0){
     printf("(MAIN %ld) Erreur Initialisation mutexFireOn: %d\n",getTid(),error); 
     fflush(stdout);
+    exit(2);
   }
 
   if((error = mInitDef(&mutexFlotteAliens)) != 0){
     printf("(MAIN %ld) Erreur Initialisation mutexFlotteAliens: %d\n",getTid(),error); 
     fflush(stdout);
+    exit(2);
+  }
+
+  if((error = mInitDef(&mutexScore)) != 0){
+    printf("(MAIN %ld) Erreur Initialisation mutexVies: %d\n",getTid(),error); 
+    fflush(stdout);
+    exit(2);
   }
 
   if((error = mInitDef(&mutexVies)) != 0){
     printf("(MAIN %ld) Erreur Initialisation mutexVies: %d\n",getTid(),error); 
     fflush(stdout);
+    exit(2);
   }
 
+
+  // Init Var Condition
   if((error = pthread_cond_init(&condScore, NULL)) != 0){
     printf("(MAIN %ld) Erreur Initialisation condScore: %d\n",getTid(),error); 
     fflush(stdout);
+    exit(2);
   }
 
   if((error = pthread_cond_init(&condVies, NULL)) != 0){
     printf("(MAIN %ld) Erreur Initialisation condVies: %d\n",getTid(),error); 
     fflush(stdout);
+    exit(2);
+  }
+
+  if((error = pthread_cond_init(&condFlotteAliens, NULL)) != 0){
+    printf("(MAIN %ld) Erreur Initialisation condVies: %d\n",getTid(),error); 
+    fflush(stdout);
+    exit(2);
   }
 
 
@@ -151,6 +173,20 @@ int main(int argc,char* argv[])
   Action.sa_flags = SA_RESTART;
   if(sigaction(SIGQUIT, &Action, NULL) == -1) printf("(MAIN %ld) Erreur de Sigaction SIGQUIT\n",getTid());
 
+  // Armement SIGALRM
+  Action.sa_handler = handlerSIGALRM;
+  sigfillset(&Action.sa_mask);
+  Action.sa_flags = SA_RESTART;
+  if(sigaction(SIGALRM, &Action, NULL) == -1) printf("(MAIN %ld) Erreur de Sigaction SIGALRM\n",getTid());
+
+  // Armement SIGCHLD
+  Action.sa_handler = handlerSIGCHLD;
+  sigfillset(&Action.sa_mask);
+  Action.sa_flags = SA_RESTART;
+  if(sigaction(SIGCHLD, &Action, NULL) == -1) printf("(MAIN %ld) Erreur de Sigaction SIGCHLD\n",getTid());
+
+
+
 
   // Creation des threads
   //Lancement ThreadVaisseau:
@@ -167,7 +203,12 @@ int main(int argc,char* argv[])
 
   //Lancement ThreadScore:
   pthread_create(&handler, NULL, (void* (*)(void*))threadScore, NULL);
-  pthread_detach(handler);
+
+
+  //Lancement Thread Vaisseau Amiral:
+  pthread_create(&handler, NULL, (void* (*)(void*))threadVaisseauAmiral, NULL);
+
+
 
   while(1)
   {
@@ -175,34 +216,119 @@ int main(int argc,char* argv[])
     while(nbVies>0)
     {
       pthread_cond_wait(&condVies, &mutexVies);
-
-      if(nbVies != 0)
-      {
+      
+      if(nbVies != 0){
         //Lancement ThreadVaisseau:
         pthread_create(&handler, NULL, (void* (*)(void*))threadVaisseau, NULL);
         pthread_detach(handler);
-        MajVies();
       }
     }
-    mUnLock(&mutexVies);
-
     if(nbVies == 0) break;
+    
+    mUnLock(&mutexVies);
   }
 
-    mLock(&mutexGrille);
-      //Suppression Grille Jeux
-      freeAlien();
+  mLock(&mutexGrille);
+    //Suppression Grille Jeux
+    freeAlien();
 
-      //Supressions Des Boucliers
-      for(int i = 11 ; i<NB_COLONNE ; i++){
-        if(tab[NB_LIGNE-2][i].type == BOUCLIER1 || tab[NB_LIGNE-2][i].type == BOUCLIER2){
-          setTab(NB_LIGNE-2, i, VIDE, 0);
-          EffaceCarre(NB_LIGNE-2, i);
-        }
+    //Supressions Des Boucliers et des bombes restantes sur la ligne des boucliers
+    for(int i = 8 ; i<NB_COLONNE ; i++){
+      if(tab[NB_LIGNE-2][i].type == BOUCLIER1 || tab[NB_LIGNE-2][i].type == BOUCLIER2 || tab[NB_LIGNE-2][i].type == BOMBE){
+        setTab(NB_LIGNE-2, i, VIDE, 0);
+        EffaceCarre(NB_LIGNE-2, i);
       }
+    }
 
-      DessineGameOver(6,11);
-    mLock(&mutexGrille);
+    //Supressions des Bombes Restante sur la ligne du Vaisseau
+    for(int i = 8 ; i<NB_COLONNE ; i++){
+      if(tab[NB_LIGNE-1][i].type == BOMBE){
+        setTab(NB_LIGNE-1, i, VIDE, 0);
+        EffaceCarre(NB_LIGNE-1, i);
+      }
+    }
+
+
+    //Ajout d'un Signal ?
+
+    //Supression Vaisseau Amiral:
+    setTab(LIGNEAMIRAL, PlacementAmiral, VIDE, 0);
+    setTab(LIGNEAMIRAL, PlacementAmiral+1, VIDE, 0);
+    EffaceCarre(LIGNEAMIRAL, PlacementAmiral);
+    EffaceCarre(LIGNEAMIRAL, PlacementAmiral+1);
+
+
+    #ifdef DEBUG
+      printf("(MAIN %ld)... GAME OVER ...\n",getTid());
+      printf("(MAIN %ld) Fin du ThreadMain\n",getTid());
+    #endif
+
+    DessineGameOver(6,11);
+  mLock(&mutexGrille);
 
   pthread_exit(NULL);
+}
+
+
+
+
+void Attente(int milli)
+{
+  struct timespec del;
+  del.tv_sec = milli/1000;
+  del.tv_nsec = (milli%1000)*1000000;
+  nanosleep(&del,NULL);
+}
+
+
+
+void setTab(int l,int c,int type,pthread_t tid)
+{
+  tab[l][c].type = type;
+  tab[l][c].tid = tid;
+}
+
+
+
+void freeAlien(){
+  for(int i = 0 ; i < NB_LIGNE-2 ; i++){
+    for(int j = 8 ; j < NB_COLONNE ; j++){
+      if(tab[i][j].type == ALIEN){
+        setTab(i,j,VIDE,0);
+        EffaceCarre(i,j);
+      }
+
+      if(tab[i][j].type == MISSILE || tab[i][j].type == BOMBE){
+        pthread_kill(tab[i][j].tid, SIGINT);
+        setTab(i,j,VIDE,0);
+        EffaceCarre(i,j);
+      }
+    }
+  }
+}
+
+
+
+void AfficheTab(){
+  printf("\n");
+  printf("\n");
+  for(int i = 0; i<NB_LIGNE; i++){
+    for(int j = 8; j<NB_COLONNE; j++){
+      printf("%d\t",tab[i][j].type);
+    }
+    printf("\n");
+    printf("\n");
+  }
+  printf("\n");
+  printf("\n");
+}
+
+
+void MajVies(){
+  if(nbVies == 2){
+    EffaceCarre(16,4);
+  }
+  if(nbVies == 1){
+    EffaceCarre(16,3);
+  }
 }

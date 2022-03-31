@@ -2,7 +2,6 @@
 #define THREADVAISSEAU_H
 
 #include "../GlobVar.h"
-#include "../fonctionPerso.h"
 #include "../threadMissile/threadMissile.h"
 #include "../threadTimeOut/threadTimeOut.h"
 

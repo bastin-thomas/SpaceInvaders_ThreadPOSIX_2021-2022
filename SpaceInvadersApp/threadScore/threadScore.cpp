@@ -18,19 +18,22 @@ void threadScore(){
 
   while(1){
     mLock(&mutexScore);
+    
     while(!MajScore){ //Tant que MajScore est False...
       pthread_cond_wait(&condScore, &mutexScore);
-
-      #ifdef DEBUG
-        printf("(threadScore %ld) Score: %d \n",getTid(), Score);
-      #endif
-
-      DessineChiffre(10,2, Score/1000);
-      DessineChiffre(10,3, (Score%1000)/100);
-      DessineChiffre(10,4, ((Score%1000)%100)/10);
-      DessineChiffre(10,5, ((Score%1000)%100)%10); //Mise à jour Graphique du Score
     }
+
+    DessineChiffre(10,2, Score/1000);
+    DessineChiffre(10,3, (Score%1000)/100);
+    DessineChiffre(10,4, ((Score%1000)%100)/10);
+    DessineChiffre(10,5, ((Score%1000)%100)%10); //Mise à jour Graphique du Score
+   
+
+    pthread_cond_signal(&condFlotteAliens);
+
+
     MajScore = false; //Reset MajScore
+    
     mUnLock(&mutexScore);
   }
   pthread_exit(NULL);

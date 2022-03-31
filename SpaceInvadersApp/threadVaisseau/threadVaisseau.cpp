@@ -26,13 +26,14 @@ void threadVaisseau(){
 
 
   mLock(&mutexGrille);
-  if (tab[NB_LIGNE-1][colVaisseau].type == VIDE) 
+  if (tab[NB_LIGNE-1][colVaisseau].type == VIDE || tab[NB_LIGNE-1][colVaisseau].type == BOMBE) 
   {
     setTab(NB_LIGNE-1, colVaisseau, VAISSEAU, getTid());
     DessineVaisseau(NB_LIGNE-1, colVaisseau);
   }
   else{
     printf("(ThreadVaisseau %ld) ERROR Init du Vaisseau: Case Non Vide\n",getTid()); 
+    exit(1);
   } 
   mUnLock(&mutexGrille);
   
@@ -58,6 +59,7 @@ void TermVaisseau(){
 
   mLock(&mutexVies);
     nbVies--;
+    MajVies();
     pthread_cond_signal(&condVies);
   mUnLock(&mutexVies);
 }

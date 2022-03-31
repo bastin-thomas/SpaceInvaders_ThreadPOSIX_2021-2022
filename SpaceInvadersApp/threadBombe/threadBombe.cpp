@@ -68,7 +68,7 @@ void threadBombe(void* pos){
   //Debut du déplacement après création:
   while(Position.L<NB_LIGNE-1)
   {
-    Attente(160);
+    Attente(DELAI_BOMBE);
 
     mLock(&mutexGrille);
 
@@ -123,21 +123,20 @@ void threadBombe(void* pos){
                 break;
 
         case BOMBE:
-                setTab(Position.L, Position.C, VIDE, 0);
-                EffaceCarre(Position.L, Position.C);
                 mUnLock(&mutexGrille);
                 pthread_exit(NULL);
               break;
 
         default:
           printf("Erreur Deplacement Bombe, Type Inconnus\n");
+          AfficheTab();
           exit(1);
       }
       Position.L++;
     mUnLock(&mutexGrille);    
   }
 
-  Attente(160);
+  Attente(DELAI_BOMBE);
   mLock(&mutexGrille);
     setTab(Position.L, Position.C, VIDE, 0);   //Effacement Bombe
     EffaceCarre(Position.L, Position.C);

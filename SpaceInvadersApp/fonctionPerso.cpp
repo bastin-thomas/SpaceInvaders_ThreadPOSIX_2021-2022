@@ -1,5 +1,6 @@
 #include "fonctionPerso.h"
 
+
 void Attente(int milli)
 {
   struct timespec del;
@@ -9,13 +10,11 @@ void Attente(int milli)
 }
 
 
-
 void setTab(int l,int c,int type,pthread_t tid)
 {
   tab[l][c].type = type;
   tab[l][c].tid = tid;
 }
-
 
 
 void freeAlien(){
@@ -39,7 +38,7 @@ void freeAlien(){
 void AfficheTab(){
   printf("\n");
   printf("\n");
-  for(int i = 0; i<NB_LIGNE; i++){
+  for(int i = 0; i<NB_LIGNE-1; i++){
     for(int j = 8; j<NB_COLONNE; j++){
       printf("%d\t",tab[i][j].type);
     }
@@ -49,6 +48,7 @@ void AfficheTab(){
   printf("\n");
   printf("\n");
 }
+
 
 void MajVies(){
   if(nbVies == 2){
