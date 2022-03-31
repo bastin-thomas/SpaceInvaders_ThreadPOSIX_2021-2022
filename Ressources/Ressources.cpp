@@ -28,12 +28,12 @@ void ChargementImages()
   // Definition de l'image de fond
   DessineImageFond("./images/fond5_920x720.bmp");
 
-  AjouteSpriteAFondTransparent(S_V_AISSEAU,"./images/Vaisseau2_40.bmp",255,255,255);
+  AjouteSpriteAFondTransparent(S_V_AISSEAU,"./images/Vaisseau1_40.bmp",255,255,255);
   AjouteSpriteAFondTransparent(S_M_ISSILE,"./images/Missile_40.bmp",255,255,255);
   AjouteSpriteAFondTransparent(S_B_OMBE,"./images/Bombe_40.bmp",255,255,255);
   AjouteSpriteAFondTransparent(S_B_OUCLIER1,"./images/Bouclier1_40.bmp",255,255,255);
   AjouteSpriteAFondTransparent(S_B_OUCLIER2,"./images/Bouclier2_40.bmp",255,255,255);
-  AjouteSpriteAFondTransparent(S_A_LIEN,"./images/Alien2_40.bmp",255,255,255);
+  AjouteSpriteAFondTransparent(S_A_LIEN,"./images/Alien3_40.bmp",255,255,255);
   AjouteSpriteAFondTransparent(S_E_XPLOSION,"./images/Explosion_40.bmp",255,255,255);
   AjouteSpriteAFondTransparent(S_V_AISSEAU_AMIRAL,"./images/VaisseauAmiral_40.bmp",255,255,255);
   AjouteSprite(S_G_AME_OVER,"./images/Gameover_40.bmp");
